@@ -2694,47 +2694,46 @@ SWIG_Lua_dostring(lua_State *L, const char *str) {
 
 #define SWIGTYPE_p_Parser swig_types[0]
 #define SWIGTYPE_p_ParserResult swig_types[1]
-#define SWIGTYPE_p_UserData swig_types[2]
-#define SWIGTYPE_p_YAML__Node swig_types[3]
-#define SWIGTYPE_p_char swig_types[4]
-#define SWIGTYPE_p_difference_type swig_types[5]
-#define SWIGTYPE_p_key_type swig_types[6]
-#define SWIGTYPE_p_mapped_type swig_types[7]
-#define SWIGTYPE_p_size_type swig_types[8]
-#define SWIGTYPE_p_sscientists__parsejoy__BitGrammarT_std__string_t swig_types[9]
-#define SWIGTYPE_p_sscientists__parsejoy__BitSetT_std__string_t swig_types[10]
-#define SWIGTYPE_p_sscientists__parsejoy__GrammarException swig_types[11]
-#define SWIGTYPE_p_sscientists__parsejoy__HashSetT_std__string_t swig_types[12]
-#define SWIGTYPE_p_sscientists__parsejoy__LuaByteCode swig_types[13]
-#define SWIGTYPE_p_sscientists__parsejoy__LuaEnvironment swig_types[14]
-#define SWIGTYPE_p_sscientists__parsejoy__MapRule swig_types[15]
-#define SWIGTYPE_p_sscientists__parsejoy__ParserGenerator swig_types[16]
-#define SWIGTYPE_p_sscientists__parsejoy__Position swig_types[17]
-#define SWIGTYPE_p_sscientists__parsejoy__Rule swig_types[18]
-#define SWIGTYPE_p_sscientists__parsejoy__SequenceRule swig_types[19]
-#define SWIGTYPE_p_sscientists__parsejoy__SetT_std__string_t swig_types[20]
-#define SWIGTYPE_p_sscientists__parsejoy__State swig_types[21]
-#define SWIGTYPE_p_sscientists__parsejoy__StringParserGenerator swig_types[22]
-#define SWIGTYPE_p_sscientists__parsejoy__StringRule swig_types[23]
-#define SWIGTYPE_p_sscientists__parsejoy__StringState swig_types[24]
-#define SWIGTYPE_p_sscientists__parsejoy__StringToken swig_types[25]
-#define SWIGTYPE_p_std__exception swig_types[26]
-#define SWIGTYPE_p_std__mapT_std__string_std__shared_ptrT_sscientists__parsejoy__Rule_t_t swig_types[27]
-#define SWIGTYPE_p_std__shared_ptrT_Token_t swig_types[28]
-#define SWIGTYPE_p_std__shared_ptrT_char_t swig_types[29]
-#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__BitGrammarT_std__string_t_t swig_types[30]
-#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__MapRule_t swig_types[31]
-#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__Rule_t swig_types[32]
-#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__StringRule_t swig_types[33]
-#define SWIGTYPE_p_std__string swig_types[34]
-#define SWIGTYPE_p_std__string__const_iterator swig_types[35]
-#define SWIGTYPE_p_std__vectorT_std__shared_ptrT_sscientists__parsejoy__Rule_t_t swig_types[36]
-#define SWIGTYPE_p_std__vectorT_std__string_t swig_types[37]
-#define SWIGTYPE_p_unsigned_long_long swig_types[38]
-#define SWIGTYPE_p_void swig_types[39]
-#define SWIGTYPE_runtime_error swig_types[40]
-static swig_type_info *swig_types[42];
-static swig_module_info swig_module = {swig_types, 41, 0, 0, 0, 0};
+#define SWIGTYPE_p_YAML__Node swig_types[2]
+#define SWIGTYPE_p_char swig_types[3]
+#define SWIGTYPE_p_difference_type swig_types[4]
+#define SWIGTYPE_p_key_type swig_types[5]
+#define SWIGTYPE_p_mapped_type swig_types[6]
+#define SWIGTYPE_p_size_type swig_types[7]
+#define SWIGTYPE_p_sscientists__parsejoy__BitGrammarT_std__string_t swig_types[8]
+#define SWIGTYPE_p_sscientists__parsejoy__BitSetT_std__string_t swig_types[9]
+#define SWIGTYPE_p_sscientists__parsejoy__GrammarException swig_types[10]
+#define SWIGTYPE_p_sscientists__parsejoy__HashSetT_std__string_t swig_types[11]
+#define SWIGTYPE_p_sscientists__parsejoy__LuaByteCode swig_types[12]
+#define SWIGTYPE_p_sscientists__parsejoy__LuaEnvironment swig_types[13]
+#define SWIGTYPE_p_sscientists__parsejoy__MapRule swig_types[14]
+#define SWIGTYPE_p_sscientists__parsejoy__ParserGenerator swig_types[15]
+#define SWIGTYPE_p_sscientists__parsejoy__Position swig_types[16]
+#define SWIGTYPE_p_sscientists__parsejoy__Rule swig_types[17]
+#define SWIGTYPE_p_sscientists__parsejoy__SequenceRule swig_types[18]
+#define SWIGTYPE_p_sscientists__parsejoy__SetT_std__string_t swig_types[19]
+#define SWIGTYPE_p_sscientists__parsejoy__State swig_types[20]
+#define SWIGTYPE_p_sscientists__parsejoy__StringParserGenerator swig_types[21]
+#define SWIGTYPE_p_sscientists__parsejoy__StringRule swig_types[22]
+#define SWIGTYPE_p_sscientists__parsejoy__StringState swig_types[23]
+#define SWIGTYPE_p_sscientists__parsejoy__StringToken swig_types[24]
+#define SWIGTYPE_p_std__exception swig_types[25]
+#define SWIGTYPE_p_std__mapT_std__string_std__shared_ptrT_sscientists__parsejoy__Rule_t_t swig_types[26]
+#define SWIGTYPE_p_std__shared_ptrT_Token_t swig_types[27]
+#define SWIGTYPE_p_std__shared_ptrT_char_t swig_types[28]
+#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__BitGrammarT_std__string_t_t swig_types[29]
+#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__MapRule_t swig_types[30]
+#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__Rule_t swig_types[31]
+#define SWIGTYPE_p_std__shared_ptrT_sscientists__parsejoy__StringRule_t swig_types[32]
+#define SWIGTYPE_p_std__string swig_types[33]
+#define SWIGTYPE_p_std__string__const_iterator swig_types[34]
+#define SWIGTYPE_p_std__vectorT_std__shared_ptrT_sscientists__parsejoy__Rule_t_t swig_types[35]
+#define SWIGTYPE_p_std__vectorT_std__string_t swig_types[36]
+#define SWIGTYPE_p_unsigned_long_long swig_types[37]
+#define SWIGTYPE_p_void swig_types[38]
+#define SWIGTYPE_runtime_error swig_types[39]
+static swig_type_info *swig_types[41];
+static swig_module_info swig_module = {swig_types, 40, 0, 0, 0, 0};
 #define SWIG_TypeQuery(name) SWIG_TypeQueryModule(&swig_module, &swig_module, name)
 #define SWIG_MangledTypeQuery(name) SWIG_MangledTypeQueryModule(&swig_module, &swig_module, name)
 
@@ -5387,60 +5386,6 @@ fail:
 }
 
 
-static int _wrap_State_getUserData(lua_State* L) {
-  int SWIG_arg = 0;
-  sscientists::parsejoy::State *arg1 = (sscientists::parsejoy::State *) 0 ;
-  UserData result;
-  
-  SWIG_check_num_args("sscientists::parsejoy::State::getUserData",1,1)
-  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("sscientists::parsejoy::State::getUserData",1,"sscientists::parsejoy::State *");
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_sscientists__parsejoy__State,0))){
-    SWIG_fail_ptr("State_getUserData",1,SWIGTYPE_p_sscientists__parsejoy__State);
-  }
-  
-  result = (arg1)->getUserData();
-  {
-    lua_rawgeti(L, LUA_REGISTRYINDEX, result);
-    SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_State_setUserData(lua_State* L) {
-  int SWIG_arg = 0;
-  sscientists::parsejoy::State *arg1 = (sscientists::parsejoy::State *) 0 ;
-  UserData arg2 ;
-  
-  SWIG_check_num_args("sscientists::parsejoy::State::setUserData",2,2)
-  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("sscientists::parsejoy::State::setUserData",1,"sscientists::parsejoy::State *");
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_sscientists__parsejoy__State,0))){
-    SWIG_fail_ptr("State_setUserData",1,SWIGTYPE_p_sscientists__parsejoy__State);
-  }
-  
-  {
-    arg2 = (int) luaL_ref(L, LUA_REGISTRYINDEX);
-  }
-  (arg1)->setUserData(arg2);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
 static int _wrap_State_className(lua_State* L) {
   int SWIG_arg = 0;
   sscientists::parsejoy::State *arg1 = (sscientists::parsejoy::State *) 0 ;
@@ -5473,8 +5418,6 @@ static swig_lua_attribute swig_State_attributes[] = {
     {0,0,0}
 };
 static swig_lua_method swig_State_methods[]= {
-    { "getUserData", _wrap_State_getUserData},
-    { "setUserData", _wrap_State_setUserData},
     { "className", _wrap_State_className},
     {0,0}
 };
@@ -8474,7 +8417,6 @@ static void *_p_sscientists__parsejoy__MapRuleTo_p_sscientists__parsejoy__Rule(v
 }
 static swig_type_info _swigt__p_Parser = {"_p_Parser", "Parser *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_ParserResult = {"_p_ParserResult", "ParserResult *", 0, 0, (void*)0, 0};
-static swig_type_info _swigt__p_UserData = {"_p_UserData", "UserData *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_YAML__Node = {"_p_YAML__Node", "YAML::Node *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_char = {"_p_char", "char *|byte_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_difference_type = {"_p_difference_type", "difference_type *", 0, 0, (void*)0, 0};
@@ -8517,7 +8459,6 @@ static swig_type_info _swigt__runtime_error = {"_runtime_error", "runtime_error"
 static swig_type_info *swig_type_initial[] = {
   &_swigt__p_Parser,
   &_swigt__p_ParserResult,
-  &_swigt__p_UserData,
   &_swigt__p_YAML__Node,
   &_swigt__p_char,
   &_swigt__p_difference_type,
@@ -8560,7 +8501,6 @@ static swig_type_info *swig_type_initial[] = {
 
 static swig_cast_info _swigc__p_Parser[] = {  {&_swigt__p_Parser, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_ParserResult[] = {  {&_swigt__p_ParserResult, 0, 0, 0},{0, 0, 0, 0}};
-static swig_cast_info _swigc__p_UserData[] = {  {&_swigt__p_UserData, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_YAML__Node[] = {  {&_swigt__p_YAML__Node, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_char[] = {  {&_swigt__p_char, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_difference_type[] = {  {&_swigt__p_difference_type, 0, 0, 0},{0, 0, 0, 0}};
@@ -8603,7 +8543,6 @@ static swig_cast_info _swigc__runtime_error[] = {  {&_swigt__runtime_error, 0, 0
 static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_Parser,
   _swigc__p_ParserResult,
-  _swigc__p_UserData,
   _swigc__p_YAML__Node,
   _swigc__p_char,
   _swigc__p_difference_type,

@@ -9,26 +9,18 @@
 namespace sscientists {
 namespace parsejoy {
 
-typedef int UserData;
-
-class Savepoint{
-public:
-    UserData userData_;
-};
-
 class State {
 public:
     State(LuaEnvironment& luaEnvironment);
     State(const State& obj);
-    UserData getUserData();
-    void setUserData(UserData userData);
-    virtual std::unique_ptr<Savepoint> Save();
-    virtual std::unique_ptr<Savepoint> Save(std::unique_ptr<Savepoint>);
-    virtual void Restore(std::unique_ptr<Savepoint>);
+    unsigned int Advance(const unsigned int n);
+    unsigned int Position();
+    void SetPosition(unsigned int n);
     virtual ~State() = 0;
     virtual const std::string className(){return "sscientists::parsejoy::State";};
+protected:
+    unsigned int pos_;
 private:
-    UserData userData_;
     LuaEnvironment& luaEnvironment_;
 };
 

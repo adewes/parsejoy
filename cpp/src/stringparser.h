@@ -10,11 +10,6 @@ struct Position {
     unsigned int to;
 };
 
-class StringSavepoint : public Savepoint {
-public:
-    unsigned int pos_;
-};
-
 class StringState : public State {
 public:
     StringState(const StringState& state);
@@ -24,16 +19,10 @@ public:
     std::string::const_iterator Current();
     std::string::const_iterator End();
     std::string Value();
-    std::unique_ptr<Savepoint> Save() override;
-    std::unique_ptr<Savepoint> Save(std::unique_ptr<StringSavepoint>);
-    void Restore(std::unique_ptr<Savepoint>) override;
     const std::string className() override {return "sscientists::parsejoy::StringState";};
-    unsigned int Advance(const unsigned int n);
-    unsigned int Position();
     unsigned int Size();
 private:
     std::string s_;
-    unsigned int pos_;
 };
 
 class StringToken : public Token {

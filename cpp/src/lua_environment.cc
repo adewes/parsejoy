@@ -61,10 +61,8 @@ void* LuaEnvironment::extract(const std::string name, const std::string typeName
 void LuaEnvironment::place(const std::string name,void* p, const std::string typeName, bool manageMemory){
     /*
     Creates a global variable containing a reference to the given LuaEnvironment
-    variable (passed as a void* pointer). Assumes that the memory management
-    of the
+    variable (passed as a void* pointer).
     */
-    //creates a global variable containing a reference to the given LuaEnvironment
 
     auto typeInfo = SWIG_TypeQuery(l_,(typeName+" *").c_str());
     if (typeInfo == NULL){

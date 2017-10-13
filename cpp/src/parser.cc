@@ -28,36 +28,23 @@ namespace parsejoy {
 State::~State() {
 }
 
-std::unique_ptr<Savepoint> State::Save(){
-    auto savepoint = std::make_unique<Savepoint>();
-    return Save(std::move(savepoint));
-}
-
-std::unique_ptr<Savepoint> State::Save(std::unique_ptr<Savepoint> savepoint){
-    savepoint->userData_ = userData_;
-    return savepoint;
-}
-
-void State::Restore(std::unique_ptr<Savepoint> savepoint){
-    if (savepoint == nullptr)
-        return;
-    userData_ = savepoint->userData_;
-}
-
-UserData State::getUserData(){
-    return userData_;
-}
-
 State::State(LuaEnvironment& luaEnvironment) : luaEnvironment_(luaEnvironment) {
-    userData_ = LUA_NOREF;
 }
 
 State::State(const State& state) : luaEnvironment_(state.luaEnvironment_) {
-    userData_ = luaEnvironment_.copyUserData(state.userData_);
 }
 
-void State::setUserData(UserData data){
-    userData_ = data;
+unsigned int State::Advance(const unsigned int n){
+    pos_ += n;
+    return pos_;
+}
+
+unsigned int State::Position(){
+    return pos_;
+}
+
+void State::SetPosition(unsigned int n){
+    pos_ = n;
 }
 
 ParserGenerator::ParserGenerator(const shared_ptr<Rule> g, LuaEnvironment& env) : luaEnvironment_(env) {
@@ -207,11 +194,15 @@ Parser ParserGenerator::compileLua(const shared_ptr<Rule> rule, RuleCache& cache
     auto compiledLua = luaEnvironment_.compileCode(stringRule->rule);
 
     auto luaParser = [compiledLua, this](State& state){
+        unsigned int pos = state.Position();
         //we place the state as a global variable
         //we can actually do this only once while the parser is running...
         this->luaEnvironment_.place("state", (void *)&state,state.className(), false);
         auto result = this->luaEnvironment_.runByteCode(compiledLua);
-        return ParserResult(emptyToken, result != 0);
+        auto error = result != 0;
+        if (error)
+            state.SetPosition(pos);
+        return ParserResult(emptyToken, error);
     };
 
     return luaParser;
@@ -230,11 +221,14 @@ Parser ParserGenerator::compileSequence(const shared_ptr<Rule> rule, RuleCache& 
     }
 
     auto sequenceParser = [parsers](State& state){
+        unsigned int pos = state.Position();
         for(auto it=parsers.begin();it!=parsers.end();++it){
             auto result = (*it)(state);
             bool error = std::get<1>(result);
-            if (error == true)
+            if (error == true){
+                state.SetPosition(pos);
                 return ParserResult(emptyToken, true);
+            }
         }
         return ParserResult(emptyToken, false);
     };
@@ -274,12 +268,14 @@ Parser ParserGenerator::compileRepeat(const shared_ptr<Rule> rule, RuleCache& ca
 
     auto repeatParser = [subruleParser](State& state){
         bool success = false;
+        unsigned int pos = state.Position();
         while(true){
             auto result = subruleParser(state);
             bool error = std::get<1>(result);
             if (error){
                 if (success)
                     return ParserResult(emptyToken, false);
+                state.SetPosition(pos);
                 return result;
             }
             success = true;
@@ -302,11 +298,13 @@ Parser ParserGenerator::compileOr(const shared_ptr<Rule> rule,RuleCache& cache){
 
     auto orParser = [this,parsers](State& state){
         for(auto it=parsers.begin();it!=parsers.end();++it){
+            unsigned int pos = state.Position();
             auto result = (*it)(state);
             bool error = std::get<1>(result);
             if (!error)
                 return result;
-        }
+            state.SetPosition(pos);
+            }
         return ParserResult(emptyToken, true);
     };
 
@@ -320,9 +318,9 @@ Parser ParserGenerator::compileAnd(const shared_ptr<Rule> rule, RuleCache& cache
     auto subruleParser = compileRule(subRule, "", cache);
 
     auto andParser = [subruleParser](State& state){
-        auto savepoint = state.Save();
+        unsigned int pos = state.Position();
         auto result = subruleParser(state);
-        state.Restore(std::move(savepoint));
+        state.SetPosition(pos);
         bool error = std::get<1>(result);
         if (error)
             return ParserResult(emptyToken, true);
@@ -338,9 +336,9 @@ Parser ParserGenerator::compileNot(const shared_ptr<Rule> rule, RuleCache& cache
     auto subruleParser = compileRule(subRule, "", cache);
 
     auto notParser = [subruleParser](State& state){
-        auto savepoint = state.Save();
+        unsigned int pos = state.Position();
         auto result = subruleParser(state);
-        state.Restore(std::move(savepoint));
+        state.SetPosition(pos);
         bool error = std::get<1>(result);
         if (error)
             return ParserResult(emptyToken, false);
@@ -356,11 +354,11 @@ Parser ParserGenerator::compileOptional(const shared_ptr<Rule> rule, RuleCache& 
     auto subruleParser = compileRule(subRule, "", cache);
 
     auto optionalParser = [subruleParser](State& state){
-        auto savepoint = state.Save();
+        unsigned int pos = state.Position();
         auto result = subruleParser(state);
         bool error = std::get<1>(result);
         if (error){
-            state.Restore(std::move(savepoint));
+            state.SetPosition(pos);
             return ParserResult(emptyToken, false);
         }
         return result;

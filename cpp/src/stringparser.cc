@@ -7,24 +7,6 @@ using namespace std;
 namespace sscientists{
 namespace parsejoy{
 
-std::unique_ptr<Savepoint> StringState::Save(){
-    auto savepoint = std::make_unique<StringSavepoint>();
-    return Save(std::move(savepoint));
-}
-
-std::unique_ptr<Savepoint> StringState::Save(std::unique_ptr<StringSavepoint> savepoint){
-    savepoint->pos_ = pos_;
-    return State::Save(std::move(savepoint));
-}
-
-void StringState::Restore(std::unique_ptr<Savepoint> savepoint){
-    if (savepoint == nullptr)
-        return;
-    auto stringSavepoint = static_cast<StringSavepoint*>(savepoint.get());
-    pos_ = stringSavepoint->pos_;
-    State::Restore(std::move(savepoint));
-}
-
 StringState::StringState(LuaEnvironment& env,const std::string s) : State(env) {
     s_ = s;
     pos_ = 0;
@@ -55,15 +37,6 @@ std::string::const_iterator StringState::End(){
 
 unsigned int StringState::Size(){
     return s_.size();
-}
-
-unsigned int StringState::Advance(const unsigned int n){
-    pos_ += n;
-    return pos_;
-}
-
-unsigned int StringState::Position(){
-    return pos_;
 }
 
 void StringToken::SetNext(std::shared_ptr<Token> token){
