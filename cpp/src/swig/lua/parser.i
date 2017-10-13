@@ -50,8 +50,6 @@ private:
     State(LuaEnvironment& luaEnvironment);
     State(const State& obj);
 public:
-    UserData getUserData();
-    void setUserData(UserData userData);
     virtual const std::string className(){return "sscientists::parsejoy::State";};
 };
 
