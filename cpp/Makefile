@@ -49,7 +49,7 @@ LIBDIRS=-L$(DEPSDIR)/boost-$(BOOST_VERSION) \
 		-L/lib/x86_64-linux-gnu/
 
 LIBS=-lcryptopp -lluajit -lyaml-cpp 
-LIBS_TOOL=-lncurses -lreadline
+LIBS_TOOL=-lreadline
 
 PROFILE_OPTS =
 CPP = g++ -fPIC -std=c++14 $(PROFILE_OPTS)
@@ -83,7 +83,7 @@ $(BUILDDIR)/libparsejoy.a: $(OBJFILES) $(C_OBJFILES) $(SWIG_LUA_OBJFILES)
 .PHONY: all
 
 tool: $(BUILDDIR) $(BUILDDIR)/libparsejoy.a
-	$(CPP) -L$(BUILDDIR) $(LIBDIRS) $(INCLUDEDIRS) $(SRCDIR)/tool.cc -lparsejoy $(LIBS) -o $(BUILDDIR)/tool
+	$(CPP) -L$(BUILDDIR) $(LIBDIRS) $(INCLUDEDIRS) $(SRCDIR)/tool.cc -lparsejoy $(LIBS) $(LIBS_TOOL) -o $(BUILDDIR)/tool
 
 python3lib: SWIG_OPTS=-py3
 python3lib: PYTHON_VERSION=3.5
