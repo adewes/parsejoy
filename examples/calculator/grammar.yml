@@ -25,13 +25,21 @@ add_expr:
     - '+'
     - e
 
+sub_expr:
+  - term
+  - $repeat:
+    - '-'
+    - e
+
 e:
   $or:
     -
       - term
       - $not:
          $or:
+          - '-'
           - '+'
           - '*'
+    - sub_expr
     - add_expr
     - mult_expr
