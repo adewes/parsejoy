@@ -1,0 +1,3 @@
+*.prof
+gmon.out
+dependencies/*

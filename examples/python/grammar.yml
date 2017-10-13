@@ -1,0 +1,1049 @@
+#A simple Python grammar
+
+tokenizer:
+
+  #store the function code and executes it
+  $indents:
+    $regex: '\s*'
+  
+  $indent:
+    $lua: |
+        i = 1
+        while(state:Value(i):sub(i,i) == "\t" or state:Value(i):sub(i,i) == " ") do
+          i = i +1
+        end
+        current_indent = state:Value(i-1)
+        state:Advance(i-1)
+        user_data = state:getUserData()
+
+        if user_data == nil then
+          user_data = {}
+          user_data.indents = {}
+          user_data.count = 0
+          state:setUserData(user_data)
+        end
+
+        table.insert(user_data.indents, current_indent)
+        user_data.count = user_data.count + 1
+
+  keyword:
+    - $or: [if, elif, else, pass, "True", "False", def, return, async, import,with,try,except,finally,as,del,print,from,
+           lambda, global, nonlocal, await, yield, break, continue, raise, None, class, for, while]
+    - $not: name
+
+  semicolon: ';'
+
+  operator:
+    $or:
+      - $or: ['**=','**','*=','>=','<=','<>','!=',
+             '==','=','+=','-=','@=','/=','%=',
+             '&=','|=','^=','<<=','>>=','//=','+','.','@','/','%','-','*','&','|','^','<','>']
+      -
+        - $or : ['in','not in','not','in','is not','is','and','or']
+        - $not: name
+  starter:
+    $or: ['@','**','*']
+
+  #this is a normal newline character
+  newline:
+    $or:
+      - $literal: "\n"
+      - $literal: "\r\n"
+
+  #this is a newline occurring inside a parenthesized expression (which we can ignore)
+  __newline:
+    $or:
+     - $literal: "\n"
+     - $literal: "\r\n"
+
+  __whitespace:
+    $repeat:
+      $or: [" ","\t"]
+
+  name:
+    - $and:
+       #to do: allow for non-ascii names
+       $or: ["_","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]
+    - $regex: '([^\W\d]|_)[\w\d\_]*'
+
+  normal_number:
+    - $and:
+       $or: ['+','-','0','1','2','3','4','5','6','7','8','9']
+    - $optional:
+       $or: ['+','-']
+    - $or:
+       - $regex: '\d*\.\d+'
+       - $regex: '\d+\.?'
+
+  __comment:
+    - $and: '#'
+    - $regex: '#[^\n]*'
+
+
+  string:
+    - $optional:
+       - $or: ['r','ur','u','br','b']
+    - $or:
+        - #we check for the corresponding string marker before parsing the regex
+          - $and: '"""'
+          - $regex: '"""([^]{0}|[^]*?[^\\])"""'
+        -
+          - $and: "'''"
+          - $regex: "'''([^]{0}|[^]*?[^\\\\])'''"
+        -
+          - $and: '"'
+          - $regex: '"(.{0}|.*?[^\\])"'
+        -
+          - $and: "'"
+          - $regex: "'(.{0}|.*?[^\\\\])'"
+
+
+  number:
+    $or:
+      - normal_number
+      -
+        - normal_number
+        - $regex: 'e|E'
+        - $optional:
+           $or:
+             - '+'
+             - '-'
+        - normal_number
+
+  __continuation:
+    - $and: '\' #here we use the and to avoid parsing the regex if no '\' is present
+    - $regex: '\\[ \t]*\n'
+
+  parenthesized_expression:
+    $repeat:
+      $or:
+          - __newline
+          - keyword
+          - operator
+          - string
+          - number
+          - name
+          - semicolon
+          - parens_expression
+          - brackets_expression
+          - curly_expression
+          - ':'
+          - ','
+          - __whitespace
+          - __comment
+          - __continuation
+
+  parens_expression:
+    - '('
+    - $optional: parenthesized_expression
+    - ')'
+
+  brackets_expression:
+    - '['
+    - $optional: parenthesized_expression
+    - ']'
+
+  curly_expression:
+    - '{'
+    - $optional: parenthesized_expression
+    - '}'
+
+  line:
+    $repeat:
+      $or:
+        - keyword
+        - operator
+        - string
+        - number
+        - name
+        - semicolon
+        - parens_expression
+        - brackets_expression
+        - curly_expression
+        - ':'
+        - ','
+        - __whitespace
+        - __comment
+        - __continuation
+
+  endmarker:
+    $eof
+
+  __empty_line:
+    - $optional: __whitespace
+    - $optional: __comment
+    - newline
+
+  start:
+    - $optional:
+       - $repeat:
+          $or:
+            - __empty_line
+            -
+              - $indent
+              - $optional: line
+              - newline
+       - $indent
+       - $optional: line
+    - endmarker
+
+start:
+  file_input
+
+single_input:
+  $or:
+    - newline
+    - __simple_stmt
+    -
+      - compound_stmt
+      - newline
+
+file_input:
+  - $optional:
+    - $repeat:
+       $or:
+        - newline
+        - __stmt
+  - endmarker
+
+eval_input:
+  - __testlist
+  - $optional:
+     $repeat: newline
+  - endmarker
+
+decorator:
+  - '@'
+  - dotted_name
+  - $optional:
+     - (
+     - $optional: arglist
+     - )
+  - newline
+
+decorators:
+  $repeat: decorator
+
+decorated:
+  - decorators
+  - $or:
+     - classdef
+     - funcdef
+     - async_funcdef
+
+async_funcdef:
+  - async
+  - funcdef
+
+funcdef:
+  - def!
+  - name
+  - parameters
+  - ':'
+  - suite
+
+parameters:
+  - (
+  - $optional: __typedargslist
+  - )
+
+
+__typedargslist:
+  $or:
+    -
+      - __tfpdef
+      - __tfpdefs
+      - $optional:
+         - ','
+         - $optional:
+            $or:
+              -
+                - vargs
+                - __tfpdefs
+                - $optional:
+                    - ','
+                    - kwargs
+              - kwargs
+    -
+      - vargs
+      - __tfpdefs
+      - $optional:
+         - ','
+         - kwargs
+    -
+      - kwargs
+
+__tfpdefs:
+  $optional:
+    $repeat:
+      - ','
+      - __tfpdef
+
+__tfpdef:
+  - name
+  - $optional:
+     - ':'
+     - __test
+  - $optional:
+    - '='
+    - __test
+
+
+varargslist:
+  $or:
+    -
+      - vfpdef
+      - $optional:
+         $repeat:
+           - ','
+           - vfpdef
+      - $optional:
+         - ','
+         - $optional:
+            $or:
+              -
+                - vargs
+                - vfpdefs
+                - $optional:
+                    - ','
+                    - kwargs
+              - kwargs
+    -
+      - vargs
+      - vfpdefs
+      - $optional:
+         - ','
+         - kwargs
+    -
+      - kwargs
+
+vfpdefs:
+  - $optional:
+      $repeat:
+        - ','
+        - vfpdef
+
+vfpdef:
+  - name
+  - $optional:
+    - '='
+    - test
+
+vargs:
+  - '*'
+  - parameter
+
+kwargs:
+  - '**'
+  - parameter
+
+parameter:
+  - name
+  - $optional:
+     - ':'
+     - test
+
+__test:
+  - $or:
+    -
+      - __or_test
+      - $optional:
+         - if
+         - __or_test
+         - else
+         - __test
+    - __lambdef
+
+__test_nocond:
+  - $or:
+     - __or_test
+     - __lambdef_nocond
+
+__lambdef:
+  - lambda
+  - $optional:
+      varargslist
+  - ':'
+  - __test
+
+__lambdef_nocond:
+  - lambda
+  - $optional:
+      - varargslist
+  - ':'
+  - __test_nocond
+
+__or_test:
+   - __and_test
+   - $optional:
+      $repeat:
+        - or
+        - __and_test
+
+__and_test:
+  - __not_test
+  - $optional:
+      $repeat:
+        - and
+        - __not_test
+
+__not_test:
+  $or:
+    -
+      - not
+      - __not_test
+    -
+      - __comparison
+
+__comparison:
+  - $or:
+    -
+      - expr
+      - $optional:
+        - $repeat:
+           - comp_op
+           - expr
+    - expr
+
+comp_op:
+  - $or:
+     - '<'
+     - '>'
+     - '=='
+     - '>='
+     - '<='
+     - '<>'
+     - '!='
+     - 'in'
+     - 'not in'
+     - not
+     - 'is not'
+     - 'is'
+
+star_expr:
+  - '*'
+  - expr
+
+expr:
+  - __xor_expr
+  - $optional:
+     $repeat:
+      - '|'
+      - __xor_expr
+
+__xor_expr:
+  - __and_expr
+  - $optional:
+     $repeat:
+      - '^'
+      - __and_expr
+
+__and_expr:
+  - __shift_expr
+  - $optional:
+     $repeat:
+      - '&'
+      - __shift_expr
+
+__shift_expr:
+  - __arith_expr
+  - $optional:
+     $repeat:
+      - $or:
+        - '<<'
+        - '>>'
+      - __arith_expr
+
+__arith_expr:
+  - __term
+  - $optional:
+     $repeat:
+      - $or:
+        - '+'
+        - '-'
+      - __term
+
+__term:
+  - __factor
+  - $optional:
+     $repeat:
+      - $or:
+        - '*'
+        - '@'
+        - '/'
+        - '%'
+        - '//'
+      - __factor
+
+__factor:
+  $or:
+    - __power
+    -
+      - $or:
+        - '+'
+        - '-'
+        - '~'
+      - __factor
+
+__power:
+  - __atom_expr
+  - $optional:
+    - '**'
+    - __factor
+
+__atom_expr:
+  - $optional:
+     - await
+  - atom
+  - $optional:
+      $repeat:
+        trailer
+
+tuple_atom:
+  - (
+  - $optional:
+     $or:
+       - yield_expr
+       - __testlist_comp
+  - )
+
+list_atom:
+  - '['
+  - $optional: __testlist_comp
+  - ']'
+
+dict_atom:
+  - '{'
+  - $optional: dictorsetmaker
+  - '}'
+
+atom:
+  $or:
+    - tuple_atom
+    - list_atom
+    - dict_atom
+    - name
+    - print
+    - number
+    - $repeat: string
+    - '...'
+    - None
+    - "True"
+    - "False"
+
+__testlist_comp:
+  - $or:
+    - __test
+    - star_expr
+  - $or:
+    - __comp_for
+    -
+      - $optional:
+         $repeat:
+          - ','
+          - $or:
+            - __test
+            - star_expr
+      - $optional:
+        - ','
+
+call_trailer:
+  - (
+  - $optional: arglist
+  - )
+
+subscript_trailer:
+  - '['
+  - __subscriptlist
+  - ']'
+
+attribute_trailer:
+  - .
+  - name
+
+trailer:
+  $or:
+    - call_trailer
+    - subscript_trailer
+    - attribute_trailer
+
+__subscriptlist:
+  - subscript
+  - $optional:
+     $repeat:
+      - ','
+      - subscript
+  - $optional:
+    - ','
+
+subscript:
+  $or:
+    -
+      - $optional: __test
+      - ':'
+      - $optional: __test
+      - $optional: sliceop
+    - __test
+
+sliceop:
+  - ':'
+  - $optional: __test
+
+__exprlist:
+  - $or:
+    - expr
+    - star_expr
+  - $optional:
+     $repeat:
+      - ','
+      - $or:
+        - expr
+        - star_expr
+  - $optional:
+    - ','
+
+__testlist:
+  - __test
+  - $optional:
+     $repeat:
+      - ','
+      - __test
+  - $optional:
+    - ','
+
+dictorsetmaker:
+  $or:
+    -
+      - $or:
+        -
+          - __test
+          - ':'
+          - __test
+        -
+          - '**'
+          - expr
+      - $or:
+        - __comp_for
+        -
+          - $optional:
+              $repeat:
+                - ','
+                - $or:
+                  -
+                    - __test
+                    - ':'
+                    - __test
+                  -
+                    - '**'
+                    - expr
+          - $optional:
+            - ','
+    -
+      - $or:
+        - __test
+        - star_expr
+      - $or:
+        - __comp_for
+        -
+          - $optional:
+             $repeat:
+              - ','
+              - $or:
+                - __test
+                - star_expr
+          - $optional:
+            - ','
+
+base_classes:
+  $optional:
+    - (
+    - $optional: arglist
+    - )
+
+classdef:
+  - class
+  - name
+  - base_classes
+  - ':'
+  - suite
+
+arglist:
+  - argument
+  - $optional:
+     $repeat:
+      - ','
+      - argument
+  - $optional:
+    - ','
+
+argument:
+  $or:
+    -
+      - __test
+      - '='
+      - __test
+    -
+      - __test
+      - $optional: __comp_for
+    -
+      - '**'
+      - __test
+    -
+      - '*'
+      - __test
+
+comp_iter:
+  $or:
+    - __comp_for
+    - __comp_if
+
+__comp_for:
+  - for
+  - __exprlist
+  - in
+  - __or_test
+  - $optional: comp_iter
+
+__comp_if:
+  - if
+  - __test_nocond
+  - $optional: comp_iter
+
+encoding_decl: name
+
+yield_expr:
+  - yield
+  - $optional: yield_arg
+
+yield_arg:
+  $or:
+    -
+      - from
+      - __test
+    - __testlist
+
+__stmt:
+  - $or:
+    - __simple_stmt
+    - __compound_stmt
+
+__simple_stmt:
+  - __small_stmt
+  - $optional:
+     $repeat:
+       - semicolon
+       - __small_stmt
+  - $optional:
+    - semicolon
+  - $or:
+    -
+      - $not: endmarker
+      - newline
+    - $and: endmarker
+
+__small_stmt:
+  $or:
+    - print_stmt
+    - expr_stmt
+    - del_stmt
+    - pass_stmt
+    - flow_stmt
+    - import_stmt
+    - global_stmt
+    - nonlocal_stmt
+    - assert_stmt
+
+expr_stmt:
+  $or:
+    -
+      - __testlist_star_expr
+      - augassign
+      - $or:
+        - yield_expr
+        - __testlist
+    -
+      - $repeat:
+          - $or:
+            - yield_expr
+            - __testlist_star_expr
+          - '='
+      - $or:
+        - yield_expr
+        - __testlist_star_expr
+    - __testlist_star_expr
+
+__testlist_star_expr:
+  - $or:
+    - __test
+    - star_expr
+  - $optional:
+    - $repeat:
+       - ','
+       - $or:
+         - __test
+         - star_expr
+  - $optional:
+     - ','
+
+augassign:
+  - $or:
+     - '+='
+     - '-='
+     - '*='
+     - '@='
+     - '/='
+     - '%='
+     - '&='
+     - '|='
+     - '^='
+     - '<<='
+     - '>>='
+     - '**='
+     - '//='
+
+del_stmt:
+  - del
+  - __exprlist
+
+pass_stmt:
+  - pass
+
+flow_stmt:
+  $or:
+    - break_stmt
+    - continue_stmt
+    - return_stmt
+    - raise_stmt
+    - yield_stmt
+
+break_stmt:
+  - break
+
+continue_stmt:
+  - continue
+
+return_value:
+  - $optional: __testlist
+
+return_stmt:
+  - return
+  - return_value
+
+yield_stmt:
+  yield_expr
+
+raise_stmt:
+  - raise
+  - $optional:
+     - __test
+     - $optional:
+       - from
+       - __test
+
+import_stmt:
+  $or:
+    - import_name
+    - import_from
+
+import_name:
+  - import
+  - dotted_as_names
+
+import_from:
+  - from
+  - $or:
+    -
+      - $optional:
+         $repeat: .
+      - dotted_name
+    - $repeat: .
+  - import
+  - $or:
+     - '*'
+     -
+       - (
+       - import_as_names
+       - )
+     - import_as_names
+
+import_as_name:
+  - name
+  - $optional:
+    - as
+    - name
+
+dotted_as_name:
+  - dotted_name
+  - $optional:
+     - as
+     - name
+
+import_as_names:
+  - import_as_name
+  - $optional:
+     $repeat:
+      - ','
+      - import_as_name
+  - $optional:
+    - ','
+
+dotted_as_names:
+  - dotted_as_name
+  - $optional:
+     $repeat:
+       - ','
+       - dotted_as_name
+
+dotted_name:
+  - name
+  - $optional:
+     $repeat:
+      - .
+      - name
+
+global_stmt:
+  - global
+  - name
+  - $optional:
+     $repeat:
+      - ','
+      - name
+
+nonlocal_stmt:
+  - nonlocal
+  - name
+  - $optional:
+     $repeat:
+      - ','
+      - name
+
+print_stmt:
+  - print
+  - __test
+  - $optional:
+      $repeat:
+       - ','
+       - __test
+
+assert_stmt:
+  - assert
+  - __test
+  - $optional:
+     $repeat:
+      - ','
+      - __test
+
+__compound_stmt:
+  $or:
+    - if_stmt
+    - while_stmt
+    - for_stmt
+    - __try_stmt
+    - with_stmt
+    - funcdef
+    - classdef
+    - decorated
+    - async_stmt
+
+async_stmt:
+  - async
+  - $or:
+    - funcdef
+    - with_stmt
+    - for_stmt
+
+if_stmt:
+  - if
+  - __test
+  - ':'
+  - suite
+  - $optional:
+     $repeat:
+      - elif
+      - __test
+      - ':'
+      - suite
+  - $optional: else_stmt
+
+else_stmt:
+  - else
+  - ':'
+  - suite
+
+while_stmt:
+  - while
+  - __test
+  - ':'
+  - suite
+  - $optional:
+    - else
+    - ':'
+    - suite
+
+for_stmt:
+  - for
+  - __exprlist
+  - in
+  - __testlist
+  - ':'
+  - suite
+  - $optional:
+     - else
+     - ':'
+     - suite
+
+__try_stmt:
+  - try
+  - ':'
+  - suite
+  - $or:
+    -
+      - $repeat:
+         - except_clause
+         - ':'
+         - suite
+      - $optional:
+         - else
+         - ':'
+         - suite
+      - $optional:
+         - finally
+         - ':'
+         - suite
+    -
+      - finally
+      - ':'
+      - suite
+
+with_stmt:
+  - with
+  - with_item
+  - $optional:
+     $repeat:
+       - ','
+       - with_item
+  - ':'
+  - suite
+
+with_item:
+  - __test
+  - $optional:
+     - as
+     - expr
+
+except_clause:
+  - except
+  - $optional:
+    - __test
+    - $optional:
+       - as
+       - name
+
+suite:
+  $or:
+    - __simple_stmt
+    -
+      - newline
+      - indent
+      - $repeat: __stmt
+      - dedent

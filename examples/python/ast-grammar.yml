@@ -1,0 +1,75 @@
+module:
+  body:
+    $repeat: stmt
+
+stmt:
+  $or:
+    -
+      - $match:
+          - def
+          - $store: name
+          - '('
+          - $store: arguments
+          - ')'
+          - ':'
+          - $store: suite
+
+
+stmt:
+  $or:
+    - funcdef:
+        - $match:
+            funcdef:
+              - $repeat: $anything
+              - $store:
+                  name: name
+                  value: name
+              - arguments
+        name: name
+        args: arguments
+        body:
+          $repeat: stmt
+        decorator_list:
+          $repeat: expr
+        returns:
+          $optional: expr
+    - async_funcdef:
+        name: name
+        args: arguments
+        body:
+          $optional:
+            $repeat: stmt
+        decorator_list:
+          $optional:
+            $repeat: expr
+        returns:
+          $optional: expr
+    - delete:
+        targets:
+          $repeat: expr
+    - assign:
+        targets:
+          $repeat: expr
+        value: expr
+    - augassign:
+        target: expr
+        op: operator
+        value: expr
+    - for:
+        target: expr
+        iter: expr
+        body:
+          $repeat:
+            stmt
+        orelse:
+          $optional:
+            $repeat:
+              stmt
+    - raise:
+        exc:
+          $optional: expr
+        cause:
+          $optional: expr
+    - import:
+        names:
+          $repeat: alias

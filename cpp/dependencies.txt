@@ -1,0 +1,4 @@
+#C++ library dependencies
+luajit==2.0.4
+yaml-cpp==0.5.3
+boost==1.61.0

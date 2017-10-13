@@ -1,0 +1,56 @@
+#store the function code and executes it
+indent:
+  $lua: |
+
+    --we copy the state
+    state = parsejoy.StringState(state)
+
+    i = 1
+    while(state:Value(i):sub(i,i) == "\t" or state:Value(i):sub(i,i) == " ") do
+      i = i +1
+    end
+
+    current_indent = state:Value(i-1)
+    print("Current indent:",current_indent)
+    user_data = state:getUserData()
+
+    if user_data == nil then
+      user_data = {}
+      user_data.indents = {}
+      user_data.count = 0
+      state:setUserData(user_data)
+    end
+
+
+    for i=1,user_data.count do
+        print(i)
+    end
+
+    table.insert(user_data.indents, current_indent)
+    user_data.count = user_data.count + 1
+
+    env:runEvalLoop()
+
+start:
+  - rep
+
+newline: "\n"
+
+rep:
+  $repeat:
+   - indent
+   - $repeat: seq
+   - $or:
+      - newline
+      - $eof
+
+seq:
+  - $or:
+      - foo
+      - bar
+
+foo:
+  $regex: "fo{2,}"
+
+bar:
+  $regex: "ba{1,}r"
