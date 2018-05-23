@@ -4,7 +4,7 @@ C_BUILDDIR=build/c
 PYTHON_BUILDDIR=build/python
 DEPSDIR=dependencies
 
-YAML_CPP_VERSION=0.5.3
+YAML_CPP_VERSION=0.5.5
 LUAJIT_VERSION=2.0.4
 BOOST_VERSION=1.61.0
 LIBCRYPTO_VERSION=5.6.4
@@ -46,9 +46,10 @@ LIBDIRS=-L$(DEPSDIR)/boost-$(BOOST_VERSION) \
 		-L$(DEPSDIR)/yaml-cpp-$(YAML_CPP_VERSION) \
 		-L$(DEPSDIR)/luajit-$(LUAJIT_VERSION)/src \
 		-L$(DEPSDIR)/re2-2016-10-01/obj \
-		-L/lib/x86_64-linux-gnu/
+		-L/lib/x86_64-linux-gnu/ \
+		-L/lib64
 
-LIBS=-lcryptopp -lluajit -lyaml-cpp 
+LIBS=-lcryptopp -lluajit -lyaml-cpp
 LIBS_TOOL=-lreadline
 
 PROFILE_OPTS =
@@ -86,7 +87,7 @@ tool: $(BUILDDIR) $(BUILDDIR)/libparsejoy.a
 	$(CPP) -L$(BUILDDIR) $(LIBDIRS) $(INCLUDEDIRS) $(SRCDIR)/tool.cc -lparsejoy $(LIBS) $(LIBS_TOOL) -o $(BUILDDIR)/tool
 
 python3lib: SWIG_OPTS=-py3
-python3lib: PYTHON_VERSION=3.5
+python3lib: PYTHON_VERSION=3.6
 python3lib: python2lib
 
 python2lib: $(PYTHON_BUILDDIR) $(PYTHON_BUILDDIR)/parsejoy.py $(BUILDDIR)/libparsejoy.a $(SRCDIR)/parsejoy_wrap_python.cc

@@ -2,14 +2,14 @@
 yaml = parsejoy.loadYAML("../examples/calculator/grammar.yml")
 print("Successfully loaded YAML")
 print(yaml)
-
+print("Parsing grammar...")
 --we parse the grammar
 grammar = parsejoy.parseYAMLGrammar(yaml)
 print("Successfully parsed grammar...")
 
 --we convert it to a map rule
 map_rule = parsejoy.toMapRule(grammar)
-
+print("Generating string parser generator...")
 --we generate a string parser generator with the tokenizer
 sp = parsejoy.StringParserGenerator(grammar, env)
 print("Compiling...")

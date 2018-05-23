@@ -31,7 +31,7 @@ import bar
 def foo(nar):
     pass
     x = a+x
---- : 
+
 class Foobar(object):
     pass
 
@@ -39,7 +39,7 @@ class Foobar(object):
         pass
 ]]
 
-print("Parsing the input 10 times...")
+print("Parsing the input 100 times...")
 
 --we benchmark the parsing code
 start = os.clock()
