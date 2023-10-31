@@ -26,16 +26,20 @@ grammar_grammar = [
     ['S', 'ows', '[]rules', 'ows', '$'],
     ['[]rules'],
     ['[]rules', '[]rules', '{}rule'],
-    ['{}rule', 'ows', '.name', '[]args', 'ows', '->', '[]patterns', ';'],
+    ['{}rule', 'ows', '.name', '[]args', 'ows', '->', 'patterns', ';'],
     ['[]args',],
     ['[]args', '(', 'arglist', ')'],
     ['arglist',],
     ['arglist', 'arglist', ',', '|arg'],
     ['arglist', '|arg'],
     ['|arg', regex(r'[a-z]+')],
-    ['[]patterns', 'patternlist'],
-    ['patternlist', 'patternlist', ',', '{}pattern'],
-    ['patternlist', '{}pattern'],
+    ['patterns', 'alternatives'],
+    ['patterns', '[]patternlist'],
+    ['alternatives', '[]alternativelist'],
+    ['[]alternativelist', '[]patternlist'],
+    ['[]alternativelist', '[]alternativelist', '|', '[]patternlist'],
+    ['[]patternlist', '[]patternlist', ',', '{}pattern'],
+    ['[]patternlist', '{}pattern'],
     ['{}pattern', 'ows', 'pattern-type', 'ows'],
     ['pattern-type', '.name'],
     ['pattern-type', '.literal'],
@@ -101,7 +105,7 @@ boo ->
     bum # comment here
 ;
 
-bum -> "bum"_foo;
+bum -> "bum"_foo | "bam" | foo,bar,baz | re:bar;
 boo -> re:[a-z\;](.*)+;
 """
 
