@@ -22,41 +22,88 @@ def regex(pattern):
         return None
     return match
 
-def literal(value):
-    def match(tokens):
-        i = 0
-        while i < len(tokens) and i < len(value) and tokens[i] == value[i]:
-            i += 1
-        return tokens[:i]
-    return match
+grammar_grammar = [
+    ['S', 'ows', '[]rules', 'ows', '$'],
+    ['[]rules'],
+    ['[]rules', '[]rules', '{}rule'],
+    ['{}rule', 'ows', '.name', '[]args', 'ows', '->', '[]patterns', ';'],
+    ['[]args',],
+    ['[]args', '(', 'arglist', ')'],
+    ['arglist',],
+    ['arglist', 'arglist', ',', '|arg'],
+    ['arglist', '|arg'],
+    ['|arg', regex(r'[a-z]+')],
+    ['[]patterns', 'patternlist'],
+    ['patternlist', 'patternlist', ',', '{}pattern'],
+    ['patternlist', '{}pattern'],
+    ['{}pattern', 'ows', 'pattern-type', 'ows'],
+    ['pattern-type', '.name'],
+    ['pattern-type', '.literal'],
+    ['pattern-type', '.regex'],
+    ['.name', '|name-value'],
+    ['|name-value', regex(r'[a-zA-Z]+')],
+    ['.literal', '"', ':literal-value', '"', ':literal-suffix'],
+    [':literal-value', regex(r'(\\.|[^\"])*')],
+    ['.regex', 're:', '|regex-value'],
+    ['|regex-value', regex(r'(\\.|[^\;])*')],
+    [':literal-suffix'],
+    [':literal-suffix', '_foo'],
+    ['optional_newline'],
+    ['optional_newline', 'newline'],
+    ['newline', '\n'],
+    ['newline-or-end', 'newline'],
+    ['newline-or-end', '$'],
+    ['ows'],
+    ['ows', 'ws'],
+    ['ws', 'ws', 'wsc'],
+    ['ws', 'wsc'],
+    ['wsc', 'comment',],
+    ['wsc', ' '],
+    ['wsc', '\t'],
+    ['wsc', '\n'],
+    ['comment', '#', 'anything', 'newline'],
+    ['anything', regex('[^\n]*')],    
+]
 
 gospel_grammar = [
-    ['S', 'optional-whitespace', 'statements', '$'],
+    ['S', 'ows', 'statements', '$'],
     ['statements'],
     ['statements', 'statements', 'statement', 'optional_newline'],
     ['optional_newline'],
     ['optional_newline', 'newline'],
     ['newline', '\n'],
-    ['statement', 'html', 'whitespace', 'html-statement', 'optional-whitespace'],
-    ['html-statement', 'template', 'whitespace', 'template-statement'],
+    ['statement', 'html', 'ws', 'html-statement', 'ows'],
+    ['html-statement', 'template', 'ws', 'template-statement'],
     ['template-statement', 'template-tag'],
     ['template-tag', 'tag-name', '(', 'tag-args', ')'],
     ['tag-name', 'div'],
     ['tag-args',],
-    ['optional-whitespace'],
-    ['optional-whitespace', 'whitespace'],
-    ['whitespace', 'whitespace', 'ws-character'],
-    ['whitespace', 'ws-character'],
-    ['ws-character', 'comment',],
-    ['ws-character', ' '],
-    ['ws-character', '\t'],
-    ['ws-character', '\n'],
+    ['ows'],
+    ['ows', 'ws'],
+    ['ws', 'ws', 'wsc'],
+    ['ws', 'wsc'],
+    ['wsc', 'comment',],
+    ['wsc', ' '],
+    ['wsc', '\t'],
+    ['wsc', '\n'],
     ['comment', '#', 'anything', 'newline'],
     ['anything', regex('[^\n]*')],
-    ['template', literal('template')],
-    ['html', literal('html')],
-    ['div', literal('div')],
 ]
+
+grammar_program = r"""
+Sub(foo,bar,baz)->bar;
+
+baz -> bum; # comment
+
+boo ->
+    bim,
+    bam,
+    bum # comment here
+;
+
+bum -> "bum"_foo;
+boo -> re:[a-z\;](.*)+;
+"""
 
 gospel_program = [
     'html', 'template', 'div', '(', ')', '\n', 
@@ -266,7 +313,7 @@ class Parser(object):
             if self.debug:
                 print(i,"---", current_state, parents)
             if i < len(input):
-                current_symbol = input[i]
+                current_symbol = input[i:]
             else:
                 current_symbol = '$'
 
@@ -282,9 +329,12 @@ class Parser(object):
                     if tokens:
                         transition = self.transitions[current_state][tr]
                         semantic_value = tokens
-            if current_symbol in self.transitions[current_state]:
-                transition = self.transitions[current_state][current_symbol]
-                semantic_value = tuple([current_symbol])
+            for tr in self.transitions[current_state]:
+                if callable(tr):
+                    continue
+                if current_symbol[:len(tr)] == tr:
+                    transition = self.transitions[current_state][tr]
+                    semantic_value = current_symbol[:len(tr)]
 
             if self.debug:
                 print(self.transitions[current_state], current_state, transition)
@@ -416,8 +466,67 @@ struct Section {
 }
 """
 
+def make_ast(semantic_value):
+
+    if not isinstance(semantic_value, tuple):
+        return
+
+    rule, children = semantic_value
+
+    if rule.startswith('[]'): # this is a list rule
+        # replace the node with a list of children
+        l = []
+        for child in children:
+            v = make_ast(child)
+            if isinstance(v, list):
+                l.extend(v)
+            elif isinstance(v, dict):
+                if len(v) == 1 and rule[2:] in v:
+                    l.extend(v[rule[2:]])
+                elif v:
+                    l.append(v)
+            elif v:
+                l.append(v)
+        return {rule[2:]: l}
+    elif rule.startswith('{}'): # this is a dict rule
+        d = {}
+        for child in children:
+            dd = make_ast(child)
+            if isinstance(dd, dict):
+                d.update(dd)
+            elif isinstance(dd, list):
+                for dv in dd:
+                    if isinstance(dv, dict):
+                        d.update(dv)
+        return d
+    elif rule.startswith('.'): # this is a key rule
+        d = {}
+        for child in children:
+            v = make_ast(child)
+            if isinstance(v, dict):
+                if not rule[1:] in d:
+                    d[rule[1:]] = {}
+                d[rule[1:]].update(v)
+            elif v:
+                d[rule[1:]] = v
+        return d
+    elif rule.startswith(':') or rule.startswith('|'): # this is a value rule
+        if children:
+            if rule.startswith(':'):
+                return {rule[1:]: children[0]}
+            return children[0]
+    else:
+        l = []
+        for child in children:
+            v = make_ast(child)
+            if isinstance(v, list):
+                l.extend(v)
+            elif v:
+                l.append(v)
+        return l
+
 if __name__ == '__main__':
-    parser = Parser(gospel_grammar, debug=False)
+    parser = Parser(grammar_grammar, debug=False)
     import pprint
     print("States:")
     pprint.pprint([list(state) for state in parser.states])
@@ -434,7 +543,7 @@ if __name__ == '__main__':
     input_string = ['def','name','(','param',',','name',',','param',',','name','=','"','characters',
                     '"', ',','keyword_param',',', ')',':','newline','indent','pass','newline','pass','dedent','newline',
                     'name','=','number','newline','number', 'newline','funcdef']
-    input_string = gospel_program
+    input_string = grammar_program
     #input_string = ['a','n','n','a']
     #input_string = ['def','name','(',')',':','newline','indent','pass','dedent','newline']
     #input_string = ['statement','newline', 'statement','newline', 'statement','newline', 'statement','newline']
@@ -443,7 +552,7 @@ if __name__ == '__main__':
     # print(len(input_string))
     # input_string ='1+2+1+121'
     start = time.time()
-    n = 100
+    n = 1
     print(" ".join(input_string))
     for i in range(n):
         stack_heads = parser.run(input_string)
@@ -453,4 +562,5 @@ if __name__ == '__main__':
     for stack_head in stack_heads:
         for semantic_value, parent in stack_head[2]:
             pprint.pprint(semantic_value)
+            pprint.pprint(make_ast(semantic_value)[0])
     exit(0)
