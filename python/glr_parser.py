@@ -1,5 +1,7 @@
 from collections import defaultdict
+import codecs
 import time
+import sys
 import re
 
 e_grammar = [
@@ -10,9 +12,18 @@ e_grammar = [
     ['T','n'],#4
 ]
 
+def literal(value):
+
+    def match(tokens):
+        if tokens[:len(value)] == value:
+            return tokens[:len(value)]
+        return None
+
+    return match
+
 def regex(pattern):
 
-    expr = re.compile(pattern)
+    expr = re.compile(pattern, re.MULTILINE|re.DOTALL)
 
     def match(tokens):
         i = 0
@@ -23,7 +34,7 @@ def regex(pattern):
     return match
 
 grammar_grammar = [
-    ['S', 'ows', '[]rules', 'ows', '$'],
+    ['S', 'ows', '[]rules', 'ows', '\0'],
     ['[]rules'],
     ['[]rules', '[]rules', '{}rule'],
     ['{}rule', 'ows', '.name', '[]args', 'ows', '->', 'patterns', ';'],
@@ -40,23 +51,35 @@ grammar_grammar = [
     ['[]alternativelist', '[]alternativelist', '|', '[]patternlist'],
     ['[]patternlist', '[]patternlist', ',', '{}pattern'],
     ['[]patternlist', '{}pattern'],
+    ['[]patternlist', 'ows'],
     ['{}pattern', 'ows', 'pattern-type', 'ows'],
     ['pattern-type', '.name'],
+    ['pattern-type', 'expression'],
+    ['pattern-type', '.reference'],
     ['pattern-type', '.literal'],
     ['pattern-type', '.regex'],
+    ['pattern-type', ':end'],
+    ['expression', '(', 'ows', 'expression-value', 'ows', ')'],
+    ['expression-value', '[]expr-alternatives'],
+    ['[]expr-alternatives', '[]expr-alternatives', 'ows', '|', 'ows', '{}expr-alternative'],
+    ['[]expr-alternatives', '{}expr-alternative'],
+    ['{}expr-alternative', '.name'],
+    ['.reference', '\\', ':reference-value'],
+    [':reference-value', regex(r'[0-9]+')],
+    [':end', '$'],
     ['.name', '|name-value'],
-    ['|name-value', regex(r'[a-zA-Z]+')],
+    ['|name-value', regex(r'(:|\[\]|\{\}|\.|\|)?[^\#\s\|\[\]\|\.\:\;\,\"\'\)\(\\]+')],
     ['.literal', '"', ':literal-value', '"', ':literal-suffix'],
     [':literal-value', regex(r'(\\.|[^\"])*')],
     ['.regex', 're:', '|regex-value'],
-    ['|regex-value', regex(r'(\\.|[^\;])*')],
+    ['|regex-value', regex(r'(\\.|[^\;\,\n])*')],
     [':literal-suffix'],
     [':literal-suffix', '_foo'],
     ['optional_newline'],
     ['optional_newline', 'newline'],
     ['newline', '\n'],
     ['newline-or-end', 'newline'],
-    ['newline-or-end', '$'],
+    ['newline-or-end', '\0'],
     ['ows'],
     ['ows', 'ws'],
     ['ws', 'ws', 'wsc'],
@@ -65,8 +88,8 @@ grammar_grammar = [
     ['wsc', ' '],
     ['wsc', '\t'],
     ['wsc', '\n'],
-    ['comment', '#', 'anything', 'newline'],
-    ['anything', regex('[^\n]*')],    
+    ['comment', '#', 'anything', 'newline-or-end'],
+    ['anything', regex(r'[^\n]*')],    
 ]
 
 gospel_grammar = [
@@ -91,7 +114,7 @@ gospel_grammar = [
     ['wsc', '\t'],
     ['wsc', '\n'],
     ['comment', '#', 'anything', 'newline'],
-    ['anything', regex('[^\n]*')],
+    ['anything', regex(r'[^\n]*')],
 ]
 
 grammar_program = r"""
@@ -287,6 +310,13 @@ class Parser(object):
                 if callable(kv):
                     self.callable_transitions[k][kv] = v
 
+        self.terminals = set()
+
+        for tr in self.transitions.values():
+            for k in tr:
+                if not k in self.non_terminals and not callable(k) and k != '__reduce__':
+                    self.terminals.add(k)
+
         return self.states, self.transitions, self.callable_transitions
 
     def get_paths(self, node, depth):
@@ -319,7 +349,7 @@ class Parser(object):
             if i < len(input):
                 current_symbol = input[i:]
             else:
-                current_symbol = '$'
+                current_symbol = '\0'
 
             if self.debug:
                 print("\n\nShifting stack heads with state '{}'".format(current_symbol))
@@ -334,7 +364,7 @@ class Parser(object):
                         transition = self.transitions[current_state][tr]
                         semantic_value = tokens
             for tr in self.transitions[current_state]:
-                if callable(tr):
+                if callable(tr) or not tr in self.terminals:
                     continue
                 if current_symbol[:len(tr)] == tr:
                     transition = self.transitions[current_state][tr]
@@ -343,11 +373,16 @@ class Parser(object):
             if self.debug:
                 print(self.transitions[current_state], current_state, transition)
 
-            if semantic_value:
+            if semantic_value is not None:
+                il = len(semantic_value)
+
+                if semantic_value == '\0':
+                    il = 0
+
                 if self.debug:
                     print("Shifting:", semantic_value)
-                new_stack_head = (transition, i+len(semantic_value), [(semantic_value,stack_head)])
-                existing_stack_head = self.get_stack_head(new_stack_heads, new_stack_head)
+                new_stack_head = (transition, i+il, [(semantic_value,stack_head)])
+                existing_stack_head = self.get_stack_head(new_stack_heads, transition)
                 if existing_stack_head:
                     existing_stack_head[2].append((semantic_value,stack_head))
                 else:
@@ -376,7 +411,7 @@ class Parser(object):
                     for path in paths:
                         sem_value, ancestor = path[-1]
                         semantic_value = tuple((non_terminal,tuple([k[0] for k in path[::-1][1:]])))
-                        if non_terminal == 'S':#this is the end state
+                        if non_terminal == 'S': #this is the end state
                             new_state = -1
                         else:
                             new_state = self.transitions[ancestor[0]][non_terminal]
@@ -393,7 +428,7 @@ class Parser(object):
                                 if other_semantic_value != semantic_value:
                                     if self.debug:
                                         print("Competing interpretations!")
-                                        #print(semantic_value,"vs.",other_semantic_value)
+                                        print(semantic_value,"vs.",other_semantic_value)
                         else:
                             new_stack_head = (new_state, i, [(semantic_value, ancestor)])
                             new_stack_heads.append(new_stack_head)
@@ -407,6 +442,8 @@ class Parser(object):
             (0, 0,[])
         ]
         accepted_stacks = []
+        longest_index = 0
+        longest_stacks = []
         output_stream = []
 
         while True:
@@ -418,15 +455,23 @@ class Parser(object):
             new_stack_heads = self.reduce_stack_heads(stack_heads, input)
 
             for stack_head in new_stack_heads:
-                if stack_head[1] == len(input) + 1:
+                if stack_head[1] == len(input) and stack_head[0] == -1:
                     accepted_stacks.append(stack_head)
 
             stack_heads = self.shift_stack_heads(new_stack_heads, input)
 
+            for stack_head in stack_heads:
+                if stack_head[1] > longest_index:
+                    longest_index = stack_head[1]
+                    longest_stacks = []
+
+                if stack_head[1] == longest_index:
+                    longest_stacks.append(stack_head)
+
             if not stack_heads:
                 break
 
-        return accepted_stacks
+        return accepted_stacks, longest_stacks
 
 input_string = r"""
 
@@ -469,6 +514,77 @@ struct Section {
   content blob
 }
 """
+
+# https://stackoverflow.com/questions/4020539/process-escape-sequences-in-a-string-in-python
+ESCAPE_SEQUENCE_RE = re.compile(r'''
+    ( \\U........      # 8-digit hex escapes
+    | \\u....          # 4-digit hex escapes
+    | \\x..            # 2-digit hex escapes
+    | \\[0-7]{1,3}     # Octal escapes
+    | \\N\{[^}]+\}     # Unicode characters by name
+    | \\[\\'"abfnrtv]  # Single-character escapes
+    )''', re.UNICODE | re.VERBOSE)
+
+def decode_escapes(s):
+    def decode_match(match):
+        return codecs.decode(match.group(0), 'unicode-escape')
+
+    return ESCAPE_SEQUENCE_RE.sub(decode_match, s)
+
+def expand_rule(rule, references=None):
+    base = []
+
+    if references is None:
+        references = {}
+
+    for i, element in enumerate(rule):
+        if isinstance(element, tuple):
+            ref, alternatives = element
+            expanded_rules = []
+            for alternative in alternatives:
+                references[ref] = alternative
+                for new_expanded_rule in expand_rule(rule[i+1:], references):
+                    fully_expanded_rule = rule[:i] + [alternative] + new_expanded_rule
+                    expanded_rules.append(fully_expanded_rule)
+            # we return a new set of rules
+            return expanded_rules
+        elif isinstance(element, int):
+            # this is a reference, we replace the element with the reference
+            rule[i] = references[element]
+    # we just return the original rule
+    return [rule]
+
+def make_grammar(ast):
+    rules = []
+    for rule in ast['rules']:
+        alternatives =[]
+        if 'patternlist' in rule:
+            alternatives.append({'patternlist': rule['patternlist']})
+        elif 'alternativelist' in rule:
+            alternatives = rule['alternativelist']
+        ref = 1
+        for alternative in alternatives:
+            parsed_rule = [rule['name']]
+            for pattern in alternative['patternlist']:
+                if 'literal' in pattern:
+                    parsed_rule.append(literal(decode_escapes(pattern['literal']['literal-value'])))
+                elif 'name' in pattern:
+                    parsed_rule.append(pattern['name'])
+                elif 'regex' in pattern:
+                    parsed_rule.append(regex(pattern['regex']))
+                elif 'end' in pattern:
+                    parsed_rule.append('\0')
+                elif 'expr-alternatives' in pattern:
+                    parsed_rule.append((ref, [e['name'] for e in pattern['expr-alternatives']]))
+                    ref += 1
+                elif 'reference' in pattern:
+                    parsed_rule.append(int(pattern['reference']['reference-value']))
+                else:
+                    print(pattern)
+                    exit(0)
+            expanded_rules = expand_rule(parsed_rule)
+            rules.extend(expanded_rules)
+    return rules
 
 def make_ast(semantic_value):
 
@@ -548,6 +664,10 @@ if __name__ == '__main__':
                     '"', ',','keyword_param',',', ')',':','newline','indent','pass','newline','pass','dedent','newline',
                     'name','=','number','newline','number', 'newline','funcdef']
     input_string = grammar_program
+
+    with open(sys.argv[1]) as input:
+        input_string = input.read()
+
     #input_string = ['a','n','n','a']
     #input_string = ['def','name','(',')',':','newline','indent','pass','dedent','newline']
     #input_string = ['statement','newline', 'statement','newline', 'statement','newline', 'statement','newline']
@@ -559,12 +679,48 @@ if __name__ == '__main__':
     n = 1
     print(" ".join(input_string))
     for i in range(n):
-        stack_heads = parser.run(input_string)
+        stack_heads, longest_stacks = parser.run(input_string)
     stop = time.time()
     print(1.0/(len(input_string)/((stop-start)/n))*1000.0)
     print("Accepted stacks: {}".format(len(stack_heads)))
-    for stack_head in stack_heads:
-        for semantic_value, parent in stack_head[2]:
-            pprint.pprint(semantic_value)
-            pprint.pprint(make_ast(semantic_value)[0])
+
+    if len(stack_heads) == 0:
+
+        for stack_head in longest_stacks:
+            print("...", input_string[max(0, stack_head[1]-100):stack_head[1]],"<---")
+            break
+
+        exit(-1)
+
+    semantic_value = stack_heads[0][2][0][0]
+    pprint.pprint(semantic_value)
+    ast = make_ast(semantic_value)[0]
+    grammar = make_grammar(ast)
+    print("grammar:")
+    pprint.pprint(grammar)
+
+    new_parser = Parser(grammar, debug=False)
+
+    filename = sys.argv[2]
+
+    with open(filename) as file:
+        content = file.read()
+
+    stack_heads, longest_stacks = new_parser.run(content)
+
+    if len(stack_heads) == 0:
+        print("cannot parse")
+
+        for stack_head in longest_stacks:
+            print("...", content[max(0, stack_head[1]-100):stack_head[1]],"<---")
+            break        
+
+        exit(-1)
+
+    semantic_value = stack_heads[0][2][0][0]
+    pprint.pprint(semantic_value)
+    ast = make_ast(semantic_value)
+
+    pprint.pprint(ast)
+
     exit(0)

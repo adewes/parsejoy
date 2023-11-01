@@ -1,0 +1,68 @@
+S -> statements, $;
+
+statements -> statements, statement | statement, ows;
+
+statement -> ows, {}html-statement, ows;
+
+### HTML
+
+{}html-statement -> "html", whitespace, html-type;
+
+html-type -> template;
+
+template -> "template", whitespace, :template-name, whitespace, {}html-template;
+
+:template-name -> re:[a-zA-Z]+;
+
+{}html-template -> {}html-tag;
+
+[]html-tags -> []html-tags , {}html-tag | {}html-tag |;
+
+{}html-tag -> "<", (:p | :a | :li | :ul), ows, []html-tag-attributes, ows, ">", ows, []html-tag-children, ows, "</", \1, ">";
+
+:p -> "p";
+:a -> "a";
+:li -> "li";
+:ul -> "ul";
+
+[]html-tag-children -> []html-tags;
+
+[]html-tag-attributes -> | whitespace, {}html-tag-attribute, []html-tag-attributes;
+
+{}html-tag-attribute -> html-attribute-name, "=", html-attribute-value;
+
+html-attribute-value -> html-attribute-string | html-attribute-expr;
+
+html-attribute-expr -> "{", ows, {}expression, ows, "}";
+
+html-attribute-name -> :html-attribute-name-regex;
+:html-attribute-name-regex -> re:[a-zA-Z]+;
+
+html-attribute-string -> "\"", :html-attribute-string-regex, "\"";
+:html-attribute-string-regex -> re:[^\"]+;
+
+
+### GENERIC EXPRESSION
+
+{}expression -> .identifier;
+
+.identifier -> :identifier-value;
+
+:identifier-value -> re:[a-zA-Z]+;
+
+### WHITESPACE
+
+# we define optional whitespace
+ows -> | whitespace;
+
+# whitespace is a sequence of whitespace characters
+whitespace -> whitespace, wsc | wsc;
+
+comment -> "#", anything, newline-or-end;
+
+newline-or-end -> "\n" | $;
+
+anything -> re:[^\n]*;
+
+# a whitespace character is either a space, tab or newline
+wsc -> " " | "\n" | "\t" | comment;
