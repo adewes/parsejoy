@@ -8,9 +8,16 @@ html template header
 				}>
 
 				</li>
+				<li></li>
+				<li></li>
+				<li></li>
+				<li foo="bar"></li>
 			</ul>
 		</p>
 	</p>
+
+var foo;
+var bar;
 
 html template footer <p></p>
 

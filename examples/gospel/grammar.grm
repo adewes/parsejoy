@@ -1,31 +1,37 @@
 S -> statements, $;
 
-statements -> statements, statement | statement, ows;
+statements -> statements, {}statement | {}statement, ows;
 
-statement -> ows, {}html-statement, ows;
+{}statement -> ows, statement-type, ows;
+
+statement-type -> .html-statement | .variable-statement;
+
+.variable-statement -> "var", whitespace, :var-name, ";";
+
+:var-name -> re:[a-zA-Z]+;
 
 ### HTML
 
-{}html-statement -> "html", whitespace, html-type;
+.html-statement -> "html", whitespace, html-type;
 
 html-type -> template;
 
-template -> "template", whitespace, :template-name, whitespace, {}html-template;
+template -> "template", whitespace, :template-name, whitespace, .html-template;
 
 :template-name -> re:[a-zA-Z]+;
 
-{}html-template -> {}html-tag;
+.html-template -> .html-tag;
 
-[]html-tags -> []html-tags , {}html-tag | {}html-tag |;
+html-tags -> html-tags , ows, .html-tag | .html-tag, ows|;
 
-{}html-tag -> "<", (:p | :a | :li | :ul), ows, []html-tag-attributes, ows, ">", ows, []html-tag-children, ows, "</", \1, ">";
+.html-tag -> "<", (:p | :a | :li | :ul), ows, []html-tag-attributes, ows, ">", ows, []html-tag-children, ows, "</", \1, ">";
 
 :p -> "p";
 :a -> "a";
 :li -> "li";
 :ul -> "ul";
 
-[]html-tag-children -> []html-tags;
+[]html-tag-children -> html-tags;
 
 []html-tag-attributes -> | whitespace, {}html-tag-attribute, []html-tag-attributes;
 

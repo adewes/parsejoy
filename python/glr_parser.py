@@ -1,5 +1,6 @@
 from collections import defaultdict
 import codecs
+import yaml
 import time
 import sys
 import re
@@ -333,7 +334,7 @@ class Parser(object):
         return u'{} \u2192 {}'.format(self.grammar[i][0],' '.join([str(s) for s in self.grammar[i][1:]]))
 
     def get_stack_head(self, stack_heads, state):
-        for head in stack_heads:
+        for head in stack_heads
             if head[0] == state:
                 return head
         return None
@@ -646,14 +647,15 @@ def make_ast(semantic_value):
         return l
 
 if __name__ == '__main__':
-    parser = Parser(grammar_grammar, debug=False)
+    parser = Parser(term_grammar, debug=False)
     import pprint
     print("States:")
-    pprint.pprint([list(state) for state in parser.states])
+    pprint.pprint([sorted(list(state)) for state in sorted(parser.states)])
     print("Transitions:")
     pprint.pprint(dict(parser.transitions))
     for i in range(len(parser.grammar)):
         print(i,":",parser.rule_as_str(i))
+    exit(0)
 
     input_string = ['n','+','n','+','n','$']
     input_string = ['(',')']
@@ -721,6 +723,6 @@ if __name__ == '__main__':
     pprint.pprint(semantic_value)
     ast = make_ast(semantic_value)
 
-    pprint.pprint(ast)
+    print(yaml.dump(ast, indent=1))
 
     exit(0)
