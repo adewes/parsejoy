@@ -33,7 +33,7 @@ func BenchmarkEGrammar(b *testing.B) {
 
 	str := "b"
 
-	for i :=0;i < 100; i++ {
+	for i :=0;i < 100000; i++ {
 		str += "+b"
 	}
 
@@ -54,8 +54,8 @@ func BenchmarkTermGrammar(b *testing.B) {
 
 	str := "1"
 
-	for i :=0;i < 100; i++ {
-		str += "+1"
+	for i :=0;i < 200; i++ {
+		str += "+1+a*a+20*a"
 	}
 
 	input := MakeStringInput(str)

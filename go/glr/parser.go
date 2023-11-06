@@ -114,6 +114,7 @@ type State struct {
 
 type Input[T Tokenlike] interface {
 	Len() int
+	At(pos int) (T, int)
 	HasPrefix(pos int, prefix T) (bool, int)
 }
 
@@ -133,6 +134,15 @@ func (s *StringInput) MatchRegex(re *regexp.Regexp, pos int) string {
 
 func (s *StringInput) Len() int {
 	return len(s.Value)
+}
+
+func (s *StringInput) At(pos int) (string, int) {
+
+	if pos >= len(s.Value) {
+		return "", 0
+	}
+
+	return s.Value[pos:pos+1], 1
 }
 
 func (s *StringInput) HasPrefix(pos int, prefix string) (bool, int) {
@@ -268,9 +278,20 @@ func MakeParser[T Tokenlike](grammar Grammar[T]) (*Parser[T], error) {
 
 func (p *Parser[T]) Rules() string {
 
-	s := "Transitions:\n"
+	s := "Rules:\n"
 
-	fmt.Println(p.Transitions)
+	for i, rule := range p.Grammar {
+
+		rhs := make([]string, len(rule)-1)
+
+		for j:=1; j < len(rule); j++ {
+			rhs[j-1] = fmt.Sprintf("%v", rule[j])
+		}
+
+		s += fmt.Sprintf("%d: %v -> %s\n", i, rule[0], strings.Join(rhs, ", "))
+	}
+
+	s += "Transitions:\n"
 
 	keys := make([]int, len(p.Transitions))
 	i := 0
@@ -292,8 +313,6 @@ func (p *Parser[T]) Rules() string {
 
 	s += "Reductions:\n"
 
-	fmt.Println(p.Reductions)
-
 	keys = make([]int, len(p.Reductions))
 	i = 0
 
@@ -314,7 +333,7 @@ func (p *Parser[T]) Rules() string {
 		sl := make([]string, len(reductions))
 
 		for j, r := range reductions {
-			sl[j] = fmt.Sprintf("%s(%d)", p.NonTerminalsList[r], r)
+			sl[j] = fmt.Sprintf("%v(%d)", p.NonTerminalsList[r], r)
 		}
 
 		s += fmt.Sprintf("%d -> %s\n", keys[i], strings.Join(sl, ", "))
@@ -586,176 +605,124 @@ func hasParent[T Tokenlike](parent *Parent[T], parents []*Parent[T]) bool {
 	return false
 }
 
-func (p *Parser[T]) Run(input Input[T]) []*Head[T] {
+func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 
-	stackHeads := make([]*Head[T], 1, 1000)
-
-	stackHeads[0] = &Head[T]{
-		Position: 0,
-		State: 0,
-		Parents: nil,
-	}
-
-	acceptedHeads := make([]*Head[T], 0, 10)
-	newStackHeads := make([]*Head[T], 0, 1000)
+	// we start in the 0 state
+	states := make([]int, 1, 10000)
+	symbols := make([]*SemanticValue[T], 0, 10)
+	lookahead := make([]*SemanticValue[T], 0, 10)
+	pos := 0
 
 	for {
 
-		// begin reduce stack heads
-
-		newStackHeads = newStackHeads[:0]
-
+		// reduce
+		reduce: 
 		for {
 
-			if len(stackHeads) == 0 {
-				break
+			state := states[len(states)-1]
+			reductions, ok := p.Reductions[state]
+
+			if !ok {
+				// no further reductions for this state
+				break reduce
 			}
 
-			head := stackHeads[0]
-			stackHeads = stackHeads[1:]
+			for _, reduction := range reductions {
+				// number of right-side symbols in this reduction rule
+				rlen := len(p.Grammar[reduction]) - 1
 
-			if head.Position < input.Len() && !hasStackHead(head, newStackHeads) {
-				newStackHeads = append(newStackHeads, head)
+				if p.Debug {
+					fmt.Printf("Reducing with rule %v (len: %d)\n", p.NonTerminalsList[reduction], len(p.Grammar[reduction])-1)
+				}
+
+				children := make([]*SemanticValue[T], rlen)
+				copy(children, symbols[len(symbols)-rlen:])
+
+				semanticValue := &SemanticValue[T]{
+					Value: p.NonTerminalsList[reduction],
+					Children: children,
+				}
+				// we remove the combined symbol from the list of symbols
+				symbols = symbols[:len(symbols)-rlen]
+				// we add the combined symbol to the lookahead value
+				lookahead = append([]*SemanticValue[T]{semanticValue}, lookahead...)
+				// we remove the combined states
+				states = states[:len(states)-rlen]
+				if p.Debug {
+					fmt.Println(states, "lookahead:", lookahead, "symbols:", symbols)
+				}
 			}
 
-			if rr, ok := p.Reductions[head.State]; ok {
-				for _, r := range rr {
-					nonTerminal := p.NonTerminalsList[r]
-					reduceLength := len(p.Grammar[r])-1
-					paths := getPaths(head, reduceLength)
-					for _, path := range paths {
-						parent := path[len(path)-1]
+			// we always prefer to shift
+			break
 
-						children := make([]*SemanticValue[T], 0, len(path))
+		}
 
-						for i := len(path) - 2; i >=0; i-- {
-							children = append(children, path[i].SemanticValue)
-						}
+		// shift
 
-						semanticValue := &SemanticValue[T]{
-							Value: nonTerminal,
-							Children: children,
-						}
+		shifted := false
 
-						var newState int
+		shift:
+		for {
+			state := states[len(states)-1]
+			transitions := p.Transitions[state]
 
-						// we check if this is the start symbol
-						if nonTerminal == p.StartSymbol {
-							newState = -1
-						} else {
-							newState = p.Transitions[parent.Head.State][nonTerminal]
-						}
+			if p.Debug {
+				fmt.Println(state, lookahead)
+			}
 
-						existingStackHead := getStackHead(newStackHeads, newState)
-
-						if existingStackHead != nil {
-							if !hasParent(parent, existingStackHead.Parents) {
-								existingStackHead.Parents = append(existingStackHead.Parents, &Parent[T]{
-									SemanticValue: semanticValue,
-									Head: parent.Head,
-								})
-								stackHeads = append(stackHeads, existingStackHead)
-							} else {
-								// to do: conflict handling
-							}
-						} else {
-							newStackHead := &Head[T]{
-								State: newState,
-								Position: head.Position,
-								Parents: []*Parent[T]{
-									&Parent[T]{
-										SemanticValue: semanticValue,
-										Head: parent.Head,
-									},
-								},
-							}
-							// we append the stack head to the new stack heads
-							newStackHeads = append(newStackHeads, newStackHead)
-							// we reprent the new stack head to the list of stack heads to process
-							stackHeads = append(stackHeads, newStackHead)
-						}
+			// we check if we have a matching symbol in the lookahead list
+			if len(lookahead) > 0 {
+				if ntt, ok := transitions[lookahead[0].Value];ok {
+					if p.Debug {
+						fmt.Printf("Shifting in symbol %v (%d)\n", lookahead[0].Value, ntt)
 					}
+					states = append(states, ntt)
+					state = ntt
+					// we add the lookahead value to the end of the symbols
+					symbols = append(symbols, lookahead[0])
+					// we remove the lookahead value from the lookaheads
+					lookahead = lookahead[1:]
+					// we mark as shifted
+					shifted = true
+					// we try to shift again
+					continue shift
 				}
 			}
+
+			// we check if one of the transition matches with the current input
+
+			t, l := input.At(pos)
+
+			if tr, ok := transitions[t]; ok {
+				if p.Debug {
+					fmt.Printf("Shifting in terminal %v (%d)\n", t, tr)
+				}
+				// we create a new semantic value and add it to the symbols
+				symbols = append(symbols, &SemanticValue[T]{
+					Value: t,
+				})
+				// we advance the position
+				pos += l
+				// we update the states list
+				states = append(states, tr)
+				// we mark as shifted
+				shifted = true
+				// we try to shift again
+				continue shift
+			}
+
+			// we can't shift anymore
+			break shift
 		}
 
-		// end reduce stack heads
-
-		for _, head := range newStackHeads {
-			if head.Position == input.Len() && head.State == -1 {
-				acceptedHeads = append(acceptedHeads, head)
-			}
-		}
-
-		stackHeads = stackHeads[:0]
-
-		newStackHeads, stackHeads = stackHeads, newStackHeads
-
-		// begin shift stack heads
-
-		for {
-
-			if len(stackHeads) == 0 {
-				break
-			}
-
-			head := stackHeads[0]
-			stackHeads = stackHeads[1:]
-
-			var transition int
-			var found bool
-			var length int
-			var token T
-
-			for _, computation := range p.Computations[head.State] {
-				if ok, value, l := computation.Function(head.Position, input); ok {
-					token = value
-					transition = computation.State
-					length = l
-					found = true
-					break
-				}
-			}
-
-			for value, tr := range p.Transitions[head.State] {
-				if ok, l := input.HasPrefix(head.Position, value); ok {
-					token = value
-					transition = tr
-					length = l
-					found = true
-					break
-				}
-			}
-
-			if found {
-
-				parent := &Parent[T]{SemanticValue: &SemanticValue[T]{Value: token}, Head: head}
-
-				newStackHead := &Head[T]{
-					State:    transition,
-					Position: head.Position + length,
-					Parents:  []*Parent[T]{parent},
-				}
-				existingStackHead := getStackHead(newStackHeads, transition)
-
-				if existingStackHead != nil {
-					existingStackHead.Parents = append(existingStackHead.Parents, parent)
-				} else {
-					newStackHeads = append(newStackHeads, newStackHead)
-				}
-			}
-		}
-
-		stackHeads = newStackHeads
-
-		// end shift stack heads
-
-		if len(stackHeads) == 0 {
+		if pos > input.Len() || !shifted {
 			break
 		}
+
 	}
 
-	return acceptedHeads
+	return lookahead
 }
 
 var termGrammar = Grammar[string]{
@@ -867,38 +834,46 @@ var grammarGrammar = Grammar[string]{
 
 func main() {
 	parser, err := MakeParser[string](termGrammar)
-
+	parser.Debug = true
 	if err != nil {
 		fmt.Printf("cannot build parser: %v\n", err)
-	} else {
-
-		for _, stack := range parser.Stacks {
-			fmt.Println(stack)
-		}
-
-		input := MakeStringInput("a*10+10+a")
-
-		acceptedHeads := parser.Run(input)
-
-		fmt.Printf("Got %d accepted stacks\n", len(acceptedHeads))
-		fmt.Println(acceptedHeads[0].SemanticValue())
-		fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+		return
 	}
+
+	fmt.Println(parser.Rules())
+
+	for _, stack := range parser.Stacks {
+		fmt.Println(stack)
+	}
+
+	input := MakeStringInput("a*10+22+a*a*a*a+a")
+
+	semanticValues := parser.Run(input)
+
+	fmt.Printf("Got %d semantic values\n", len(semanticValues))
+	fmt.Println(semanticValues[0].PrettyString())
+	//fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+
 
 	parser, _ = MakeParser[string](eGrammar)
 
 	eStr := "b"
 
-	for i :=0;i < 100; i++ {
+	for i :=0;i < 1; i++ {
 		eStr += "+b"
 	}
 
+	fmt.Println("ready")
+
 	fmt.Println(parser.Rules())
 
-	input := MakeStringInput(eStr)
-	acceptedHeads := parser.Run(input)
-	fmt.Printf("Got %d accepted stacks (eGrammar)\n", len(acceptedHeads))
+	input = MakeStringInput(eStr)
+	semanticValues = parser.Run(input)
+	fmt.Printf("Got %d semantic values (eGrammar)\n", len(semanticValues))
+	fmt.Println(semanticValues[0].PrettyString())
 	// fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+
+	return
 
 	grammarParser, err := MakeParser[string](grammarGrammar)
 
@@ -907,6 +882,8 @@ func main() {
 	} else {
 		fmt.Println("grammar parser is ready")
 	}
+
+	fmt.Println(grammarParser.Rules())
 
 	grammarStr := ""
 
@@ -918,11 +895,9 @@ func main() {
 
 	fmt.Println("Running...")
 
-	acceptedHeads = grammarParser.Run(grammarProgram)
-	fmt.Printf("Got %d accepted stacks\n", len(acceptedHeads))
+	semanticValues = grammarParser.Run(grammarProgram)
+	fmt.Printf("Got %d semantic values\n", len(semanticValues))
 
-	return
-
-	fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+	fmt.Println(semanticValues[0].PrettyString())
 
 }
