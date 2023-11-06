@@ -668,7 +668,7 @@ func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 			transitions := p.Transitions[state]
 
 			if p.Debug {
-				fmt.Println(state, lookahead)
+				fmt.Println("Shifting:", state, lookahead, symbols)
 			}
 
 			// we check if we have a matching symbol in the lookahead list
@@ -690,26 +690,51 @@ func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 				}
 			}
 
+			// finally, we check computed transitions...
+			computations := p.Computations[state]
+			for _, computation := range computations {
+				if ok, t, l := computation.Function(pos, input); ok {
+					// we can shift in a computation
+
+					if p.Debug {
+						fmt.Printf("Shifting in computed value %v (%d)\n", t, computation.State)
+					}
+	
+					states = append(states, computation.State)
+	
+					// we advance the position
+					pos += l
+
+					symbols = append(symbols, &SemanticValue[T]{
+						Value: t,
+					})
+
+					shifted = true
+
+					continue shift
+				}
+			}
+
 			// we check if one of the transition matches with the current input
 
-			t, l := input.At(pos)
-
-			if tr, ok := transitions[t]; ok {
-				if p.Debug {
-					fmt.Printf("Shifting in terminal %v (%d)\n", t, tr)
+			for t, tr := range transitions {
+				if ok, l := input.HasPrefix(pos, t); ok {
+					if p.Debug {
+						fmt.Printf("Shifting in terminal %v (%d)\n", t, tr)
+					}
+					// we create a new semantic value and add it to the symbols
+					symbols = append(symbols, &SemanticValue[T]{
+						Value: t,
+					})
+					// we advance the position
+					pos += l
+					// we update the states list
+					states = append(states, tr)
+					// we mark as shifted
+					shifted = true
+					// we try to shift again
+					continue shift
 				}
-				// we create a new semantic value and add it to the symbols
-				symbols = append(symbols, &SemanticValue[T]{
-					Value: t,
-				})
-				// we advance the position
-				pos += l
-				// we update the states list
-				states = append(states, tr)
-				// we mark as shifted
-				shifted = true
-				// we try to shift again
-				continue shift
 			}
 
 			// we can't shift anymore
@@ -806,7 +831,7 @@ var grammarGrammar = Grammar[string]{
 	{":reference-value", CompileRegex[string]("[0-9]+")},
 	{":end", "$"},
 	{".name", "|name-value"},
-	{"|name-value", CompileRegex[string](`(:|\[\]|\{\}|\.|\|)?[^\#\s\|\[\]\|\.\:\;\,\"\'\)\(\\]+`)},
+	{"|name-value", CompileRegex[string](`(:|\[\]|\{\}|\.|\|)?[^\#\s\|\[\]\|\.\:\;\,\"\'\)\(\\\-]+`)},
 	{".literal", "\"", ":literal-value", "\"", ":literal-suffix"},
 	{":literal-value", CompileRegex[string](`(\\.|[^\"])*`)},
 	{".regex", "re:", "|regex-value"},
@@ -873,8 +898,6 @@ func main() {
 	fmt.Println(semanticValues[0].PrettyString())
 	// fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
 
-	return
-
 	grammarParser, err := MakeParser[string](grammarGrammar)
 
 	if err != nil {
@@ -887,17 +910,21 @@ func main() {
 
 	grammarStr := ""
 
-	for i:=0; i<10000; i++ {
-		grammarStr += "baz -> bar, bar, bar, bar;"
+	for i:=0; i<1; i++ {
+		grammarStr += "baz -> bar, bar, bar, bar; bar -> bam;"
 	}
 
 	grammarProgram := MakeStringInput(grammarStr)
+
+	grammarParser.Debug = true
 
 	fmt.Println("Running...")
 
 	semanticValues = grammarParser.Run(grammarProgram)
 	fmt.Printf("Got %d semantic values\n", len(semanticValues))
 
-	fmt.Println(semanticValues[0].PrettyString())
+	for _, semanticValue := range semanticValues {
+		fmt.Println(semanticValue.PrettyString())	
+	}
 
 }

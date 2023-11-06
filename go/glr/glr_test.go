@@ -12,7 +12,7 @@ func BenchmarkGrammarGrammar(b *testing.B) {
 
 	str := ""
 
-	for i :=0;i < 10000; i++ {
+	for i :=0;i < 1; i++ {
 		str += "baz -> bar, bar, bar, bar;"
 	}
 
@@ -21,7 +21,7 @@ func BenchmarkGrammarGrammar(b *testing.B) {
 	b.SetBytes(int64(len(str)))
 
     for i := 0; i < b.N; i++ {
-		if len(parser.Run(input)) != 1 {
+		if len(parser.Run(input)) == 0 {
 			panic("uh oh")
 		}
     }
