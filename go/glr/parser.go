@@ -3,18 +3,103 @@ package main
 import (
 	"fmt"
 	"sort"
+	"regexp"
 	"strings"
 )
 
+type Token[T any] struct {
+	Type string
+	Value T
+}
+
+type SemanticValue[T Tokenlike] struct {
+	Value T
+	Children []*SemanticValue[T]
+}
+
+func (s *SemanticValue[T]) PrettyString() string {
+	return s.prettyString(0)
+}
+
+func (s *SemanticValue[T]) prettyString(indent int) string {
+	output := ""
+	if s.Value != *new(T) {
+		output += fmt.Sprintf("%s%v\n", strings.Repeat(" ", indent), s.Value)
+	}
+	for _, child := range s.Children {
+		output += child.prettyString(indent + 1)
+	}
+	return output
+}
+
+func (s SemanticValue[T]) String() string {
+
+	children := make([]string, len(s.Children))
+
+	for i, child := range s.Children {
+		children[i] = child.String()
+	}
+
+	if s.Value == *new(T) {
+		return fmt.Sprintf("sv(%s)", strings.Join(children, ", "))
+	}
+
+	if len(children) == 0 {
+		return fmt.Sprintf("sv(%v)", s.Value)
+	}
+
+	return fmt.Sprintf("sv(%v, %s)", s.Value, strings.Join(children, ", "))
+}
+
+func (s *SemanticValue[T]) Equals(other *SemanticValue[T]) bool {
+
+	if s.Value != other.Value {
+		return false
+	}
+
+	if len(s.Children) != len(other.Children) {
+		return false
+	}
+
+	for i, child := range s.Children {
+		if !child.Equals(other.Children[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
 type Parent[T Tokenlike] struct {
-	SemanticValue T
+	SemanticValue *SemanticValue[T]
 	Head          *Head[T]
+}
+
+func (p Parent[T]) String() string {
+	return fmt.Sprintf("parent(%s, %s)", p.SemanticValue.String(), p.Head.String())
 }
 
 type Head[T Tokenlike] struct {
 	State    int
 	Position int
 	Parents  []*Parent[T]
+}
+
+func (h *Head[T]) SemanticValue() *SemanticValue[T] {
+	if len(h.Parents) == 0 {
+		return nil
+	}
+	return h.Parents[0].SemanticValue
+}
+
+func (h Head[T]) String() string {
+	parents := make([]string, len(h.Parents))
+
+	for i, parent := range h.Parents {
+		parents[i] = parent.String()
+	}
+
+	return fmt.Sprintf("head(%d, %d, %s)", h.Position, h.State, strings.Join(parents, ", "))
 }
 
 func (h *Head[T]) Equals(other *Head[T]) bool {
@@ -27,45 +112,47 @@ type State struct {
 	Position int
 }
 
-type Input[T Tokenlike] struct {
-	input []T
+type Input[T Tokenlike] interface {
+	Len() int
+	HasPrefix(pos int, prefix T) (bool, int)
 }
 
-func MakeInput[T Tokenlike](v []T) *Input[T] {
-	return &Input[T]{
-		input: v,
+type StringInput struct {
+	Value string
+}
+
+func MakeStringInput(input string) *StringInput {
+	return &StringInput{
+		Value: input,
 	}
 }
 
-func (i *Input[T]) Len() int {
-	return len(i.input)
+func (s *StringInput) MatchRegex(re *regexp.Regexp, pos int) string {
+	return re.FindString(s.Value[pos:])
 }
 
-func (i *Input[T]) At(pos int) []T {
-	return i.input[pos : pos+1]
+func (s *StringInput) Len() int {
+	return len(s.Value)
 }
 
-func (i *Input[T]) From(pos int) []T {
-	return i.input[pos:]
-}
-
-func (i *Input[T]) HasPrefix(pos int, prefix T) bool {
-	switch vt := any(i.input).(type) {
-	case []string:
-		return vt[pos] == any(prefix).(string)
-	case []int:
-		pv := any(prefix).([]int)
-		for i, v := range vt[pos:] {
-			if i >= len(pv) {
-				return true
-			}
-			if v != pv[i] {
-				return false
-			}
-		}
+func (s *StringInput) HasPrefix(pos int, prefix string) (bool, int) {
+	if prefix == "" {
+		return pos >= len(s.Value), 0
 	}
+	return strings.HasPrefix(s.Value[pos:], prefix), len(prefix)
+}
 
-	return false
+
+type IntInput struct {
+	Values []int
+}
+
+func (i *IntInput) Len() int {
+	return len(i.Values)
+}
+
+func (i *IntInput) HasPrefix(pos int, prefix int) (bool, int) {
+	return pos < len(i.Values) && i.Values[pos] == prefix, 1
 }
 
 type Tokenlike interface {
@@ -77,7 +164,7 @@ func (s State) String() string {
 	return fmt.Sprintf("(%d, %d)", s.State, s.Position)
 }
 
-type Grammar[T Tokenlike] [][]T
+type Grammar[T Tokenlike] [][]any
 type Stack []*State
 
 func (s Stack) Len() int {
@@ -147,12 +234,23 @@ func (s Stack) String() string {
 	return fmt.Sprintf("{%s}", strings.Join(states, ", "))
 }
 
+type TransitionFunction[T Tokenlike] func(pos int, input Input[T]) (bool, T, int)
+
+type Computation[T Tokenlike] struct {
+	State int
+	Function TransitionFunction[T]
+}
+
 type Parser[T Tokenlike] struct {
 	NonTerminals map[T]bool
+	NonTerminalsList []T
+	Terminals    map[T]bool
 	Transitions  map[int]map[T]int
+	Computations map[int][]*Computation[T]
 	Reductions   map[int][]int
 	Stacks       []Stack
 	Grammar      Grammar[T]
+	StartSymbol  T
 	Debug        bool
 }
 
@@ -168,7 +266,65 @@ func MakeParser[T Tokenlike](grammar Grammar[T]) (*Parser[T], error) {
 	return parser, nil
 }
 
-func (p *Parser[T]) getStatesForNonTerminal(nonTerminal T) []int {
+func (p *Parser[T]) Rules() string {
+
+	s := "Transitions:\n"
+
+	fmt.Println(p.Transitions)
+
+	keys := make([]int, len(p.Transitions))
+	i := 0
+
+	for key, _ := range p.Transitions {
+		keys[i] = key
+		i++
+	}
+
+	sort.Ints(keys)
+
+	for i:=0; i<len(keys); i++ {
+
+		transitions := p.Transitions[keys[i]]
+		for symbol, j := range transitions {
+			s += fmt.Sprintf("%d + '%v' -> %d\n",keys[i], symbol, j)
+		}
+	}
+
+	s += "Reductions:\n"
+
+	fmt.Println(p.Reductions)
+
+	keys = make([]int, len(p.Reductions))
+	i = 0
+
+	for key, _ := range p.Reductions {
+		keys[i] = key
+		i++
+	}
+
+	sort.Ints(keys)
+
+	for i:=0;i<len(keys); i++ {
+		reductions, ok := p.Reductions[keys[i]]
+
+		if !ok {
+			continue
+		}
+
+		sl := make([]string, len(reductions))
+
+		for j, r := range reductions {
+			sl[j] = fmt.Sprintf("%s(%d)", p.NonTerminalsList[r], r)
+		}
+
+		s += fmt.Sprintf("%d -> %s\n", keys[i], strings.Join(sl, ", "))
+	}
+
+	return s
+} 
+
+// Returns all rules for the given nonterminal
+func (p *Parser[T]) getRulesForNonTerminal(nonTerminal T) []int {
 	matchingStates := make([]int, 0)
 	for i, rule := range p.Grammar {
 		if rule[0] == nonTerminal {
@@ -178,6 +334,7 @@ func (p *Parser[T]) getStatesForNonTerminal(nonTerminal T) []int {
 	return matchingStates
 }
 
+// returns all rules that can follow a given rule
 func (p *Parser[T]) getClosure(rule int, pos int) []*State {
 	closure := make(map[int]bool)
 	rulesToExamine := make([]int, 0)
@@ -188,13 +345,17 @@ func (p *Parser[T]) getClosure(rule int, pos int) []*State {
 	// to do: bounds checking
 	item := p.Grammar[rule][pos+1]
 
-	if _, ok := p.NonTerminals[item]; ok {
-		rulesForNonTerminal := p.getStatesForNonTerminal(item)
-		for _, rule := range rulesForNonTerminal {
-			closure[rule] = true
+	switch vt := item.(type) {
+	case T:
+		if _, ok := p.NonTerminals[vt]; ok {
+			rulesForNonTerminal := p.getRulesForNonTerminal(vt)
+			for _, rule := range rulesForNonTerminal {
+				closure[rule] = true
+			}
+			rulesToExamine = rulesForNonTerminal
 		}
-		rulesToExamine = rulesForNonTerminal
 	}
+
 
 	for {
 		if len(rulesToExamine) == 0 {
@@ -209,16 +370,22 @@ func (p *Parser[T]) getClosure(rule int, pos int) []*State {
 			continue
 		}
 
-		// to do: bounds checking
-		if _, ok := p.NonTerminals[p.Grammar[rule][1]]; ok {
-			newStates := p.getStatesForNonTerminal(p.Grammar[rule][1])
-			for _, newState := range newStates {
-				if _, ok := closure[newState]; !ok {
-					rulesToExamine = append(rulesToExamine, newState)
-					closure[newState] = true
+		// we look at the leftmost symbol of the rule
+		item := p.Grammar[rule][1]
+
+		switch vt := item.(type) {
+		case T:
+			if _, ok := p.NonTerminals[vt]; ok {
+				newRules := p.getRulesForNonTerminal(vt)
+				for _, newRule := range newRules {
+					if _, ok := closure[newRule]; !ok {
+						rulesToExamine = append(rulesToExamine, newRule)
+						closure[newRule] = true
+					}
 				}
 			}
 		}
+
 	}
 
 	stackStates := make([]*State, 0)
@@ -247,6 +414,11 @@ outer:
 	return -1
 }
 
+type FunctionState[T Tokenlike] struct {
+	Function TransitionFunction[T]
+	State *State
+}
+
 func (p *Parser[T]) extendState(stack []*State) error {
 
 	j := stackIndex(stack, p.Stacks)
@@ -256,13 +428,23 @@ func (p *Parser[T]) extendState(stack []*State) error {
 	}
 
 	rulesBySymbol := make(map[T][]*State)
+	rulesByFunction := make([]*FunctionState[T], 0)
 	rulesToReduce := make([]int, 0)
 
 	for _, state := range stack {
-		if len(p.Grammar[state.State]) > state.Position+1 {
+		if state.Position < len(p.Grammar[state.State])-1 {
+			// this state is not at the end of a rule
 			symbol := p.Grammar[state.State][state.Position+1]
-			rulesBySymbol[symbol] = append(rulesBySymbol[symbol], &State{state.State, state.Position + 1})
+
+			switch vt := symbol.(type) {
+			case T:
+				rulesBySymbol[vt] = append(rulesBySymbol[vt], &State{state.State, state.Position + 1})
+			case TransitionFunction[T]:
+				rulesByFunction = append(rulesByFunction, &FunctionState[T]{vt, &State{state.State, state.Position + 1}})
+			}
+
 		} else {
+			// this state is at the end of a rule, it leads to a reduction
 			rulesToReduce = append(rulesToReduce, state.State)
 		}
 	}
@@ -272,7 +454,7 @@ func (p *Parser[T]) extendState(stack []*State) error {
 		p.Reductions[j] = rulesToReduce
 	}
 
-	for symbol, states := range rulesBySymbol {
+	addStates := func(states []*State) int {
 		newStack := MakeStack(states)
 
 		for _, state := range states {
@@ -287,6 +469,29 @@ func (p *Parser[T]) extendState(stack []*State) error {
 			p.extendState(newStack)
 		}
 
+		return i
+
+	}
+
+	for _, functionState := range rulesByFunction {
+
+		i := addStates([]*State{functionState.State})
+
+		if _, ok := p.Computations[j]; !ok {
+			p.Computations[j] = make([]*Computation[T], 0)
+		}
+
+		p.Computations[j] = append(p.Computations[j], &Computation[T]{
+			State: i,
+			Function: functionState.Function,
+		})
+
+	}
+
+	for symbol, states := range rulesBySymbol {
+
+		i := addStates(states)
+
 		if _, ok := p.Transitions[j]; !ok {
 			p.Transitions[j] = make(map[T]int)
 		}
@@ -300,28 +505,41 @@ func (p *Parser[T]) extendState(stack []*State) error {
 
 func (p *Parser[T]) generateStatesAndTransitions() error {
 	p.NonTerminals = make(map[T]bool)
+	p.NonTerminalsList = make([]T, len(p.Grammar))
 
-	for _, rule := range p.Grammar {
-		p.NonTerminals[rule[0]] = true
+	for i, rule := range p.Grammar {
+
+		if item, ok := rule[0].(T); !ok {
+			return fmt.Errorf("invalid grammar left-side rule!")
+		} else {
+			p.NonTerminals[item] = true
+			p.NonTerminalsList[i] = item
+			if i == 0 {
+				p.StartSymbol = item
+			}
+		}
+
 	}
 
 	p.Transitions = make(map[int]map[T]int)
+	p.Computations = make(map[int][]*Computation[T])
 	p.Reductions = make(map[int][]int)
-	p.Stacks = make([]Stack, 0)
 
 	initialState := Stack{{0, 0}}
 	initialState = initialState.Add(p.getClosure(0, 0))
-	p.Stacks = append(p.Stacks, initialState)
+	p.Stacks = []Stack{initialState}
 
 	return p.extendState(initialState)
 }
 
-func (p *Parser[T]) getPaths(head *Head[T], depth int) [][]*Parent[T] {
+func getPaths[T Tokenlike](head *Head[T], depth int) [][]*Parent[T] {
 	if depth == 0 {
 		return [][]*Parent[T]{
 			[]*Parent[T]{
 				&Parent[T]{
-					SemanticValue: *new(T),
+					SemanticValue: &SemanticValue[T]{
+						Value: *new(T),
+					},
 					Head:          head,
 				},
 			},
@@ -331,7 +549,7 @@ func (p *Parser[T]) getPaths(head *Head[T], depth int) [][]*Parent[T] {
 	paths := [][]*Parent[T]{}
 
 	for _, parent := range head.Parents {
-		parentPaths := p.getPaths(parent.Head, depth-1)
+		parentPaths := getPaths[T](parent.Head, depth-1)
 		for _, parentPath := range parentPaths {
 			paths = append(paths, append([]*Parent[T]{&Parent[T]{SemanticValue: parent.SemanticValue, Head: head}}, parentPath...))
 		}
@@ -340,58 +558,13 @@ func (p *Parser[T]) getPaths(head *Head[T], depth int) [][]*Parent[T] {
 	return paths
 }
 
-func (p *Parser[T]) getStackHead(heads []*Head[T], state int) *Head[T] {
+func getStackHead[T Tokenlike](heads []*Head[T], state int) *Head[T] {
 	for _, head := range heads {
 		if head.State == state {
 			return head
 		}
 	}
 	return nil
-}
-
-func (p *Parser[T]) shiftStackHeads(stackHeads []*Head[T], input *Input[T]) []*Head[T] {
-	newStackHeads := make([]*Head[T], 0)
-
-	for {
-
-		fmt.Println("--.-")
-		if len(stackHeads) == 0 {
-			break
-		}
-
-		head := stackHeads[0]
-		stackHeads = stackHeads[1:]
-
-		var transition int
-		var semanticValue T
-
-		for value, tr := range p.Transitions[head.State] {
-			if input.HasPrefix(head.Position, value) {
-				semanticValue = value
-				transition = tr
-				break
-			}
-		}
-
-		if semanticValue != *new(T) {
-
-			parent := &Parent[T]{SemanticValue: semanticValue, Head: head}
-
-			newStackHead := &Head[T]{
-				State:    transition,
-				Position: head.Position + 1,
-				Parents:  []*Parent[T]{parent},
-			}
-			existingStackHead := p.getStackHead(newStackHeads, transition)
-
-			if existingStackHead != nil {
-				existingStackHead.Parents = append(existingStackHead.Parents, parent)
-			} else {
-				newStackHeads = append(newStackHeads, newStackHead)
-			}
-		}
-	}
-	return newStackHeads
 }
 
 func hasStackHead[T Tokenlike](head *Head[T], heads []*Head[T]) bool {
@@ -406,134 +579,291 @@ func hasStackHead[T Tokenlike](head *Head[T], heads []*Head[T]) bool {
 
 func hasParent[T Tokenlike](parent *Parent[T], parents []*Parent[T]) bool {
 	for _, existingParent := range parents {
-		if existingParent.SemanticValue == parent.SemanticValue && existingParent.Head.Equals(parent.Head) {
+		if existingParent.Head.Equals(parent.Head) {
 			return true
 		}
 	}
 	return false
 }
 
-func (p *Parser[T]) reduceStackHeads(stackHeads []*Head[T], input *Input[T]) []*Head[T] {
-	newStackHeads := []*Head[T]{}
+func (p *Parser[T]) Run(input Input[T]) []*Head[T] {
+
+	stackHeads := make([]*Head[T], 1, 1000)
+
+	stackHeads[0] = &Head[T]{
+		Position: 0,
+		State: 0,
+		Parents: nil,
+	}
+
+	acceptedHeads := make([]*Head[T], 0, 10)
+	newStackHeads := make([]*Head[T], 0, 1000)
+
 	for {
-		if len(stackHeads) == 0 {
-			break
-		}
 
-		fmt.Println(".---", len(stackHeads))
+		// begin reduce stack heads
 
-		head := stackHeads[0]
-		stackHeads = stackHeads[1:]
+		newStackHeads = newStackHeads[:0]
 
-		if head.Position < input.Len() && !hasStackHead(head, newStackHeads) {
-			newStackHeads = append(newStackHeads, head)
-		}
+		for {
 
-		if rr, ok := p.Reductions[head.State]; ok {
-			for _, r := range rr {
-				nonTerminal := p.Grammar[r][0]
-				reduceLength := len(p.Grammar[r])-1
-				paths := p.getPaths(head, reduceLength)
-				for _, path := range paths {
-					parent := path[len(path)-1]
+			if len(stackHeads) == 0 {
+				break
+			}
 
-					var newState int
+			head := stackHeads[0]
+			stackHeads = stackHeads[1:]
 
-					// we check if this is the start symbol
-					if nonTerminal == p.Grammar[0][0] {
-						newState = -1
-					} else {
-						newState = p.Transitions[parent.Head.State][nonTerminal]
-					}
-					existingStackHead := p.getStackHead(newStackHeads, newState)
+			if head.Position < input.Len() && !hasStackHead(head, newStackHeads) {
+				newStackHeads = append(newStackHeads, head)
+			}
 
-					if existingStackHead != nil {
-						if hasParent(parent, existingStackHead.Parents) {
-							// to do: conflict handling
+			if rr, ok := p.Reductions[head.State]; ok {
+				for _, r := range rr {
+					nonTerminal := p.NonTerminalsList[r]
+					reduceLength := len(p.Grammar[r])-1
+					paths := getPaths(head, reduceLength)
+					for _, path := range paths {
+						parent := path[len(path)-1]
+
+						children := make([]*SemanticValue[T], 0, len(path))
+
+						for i := len(path) - 2; i >=0; i-- {
+							children = append(children, path[i].SemanticValue)
+						}
+
+						semanticValue := &SemanticValue[T]{
+							Value: nonTerminal,
+							Children: children,
+						}
+
+						var newState int
+
+						// we check if this is the start symbol
+						if nonTerminal == p.StartSymbol {
+							newState = -1
 						} else {
-							fmt.Println("no parent...", nonTerminal, parent.Head.Position, parent.Head.State, existingStackHead.Position, existingStackHead.State, len(existingStackHead.Parents))
-							existingStackHead.Parents = append(existingStackHead.Parents, &Parent[T]{
-								SemanticValue: nonTerminal,
-								Head: parent.Head,
-							})
-							// we process the stack head again to see if we can further reduce it
-							stackHeads = append([]*Head[T]{head}, stackHeads...)							
+							newState = p.Transitions[parent.Head.State][nonTerminal]
 						}
-					} else {
-						newStackHead := &Head[T]{
-							State: newState,
-							Position: head.Position,
-							Parents: []*Parent[T]{
-								&Parent[T]{
-									SemanticValue: nonTerminal,
+
+						existingStackHead := getStackHead(newStackHeads, newState)
+
+						if existingStackHead != nil {
+							if !hasParent(parent, existingStackHead.Parents) {
+								existingStackHead.Parents = append(existingStackHead.Parents, &Parent[T]{
+									SemanticValue: semanticValue,
 									Head: parent.Head,
+								})
+								stackHeads = append(stackHeads, existingStackHead)
+							} else {
+								// to do: conflict handling
+							}
+						} else {
+							newStackHead := &Head[T]{
+								State: newState,
+								Position: head.Position,
+								Parents: []*Parent[T]{
+									&Parent[T]{
+										SemanticValue: semanticValue,
+										Head: parent.Head,
+									},
 								},
-							},
+							}
+							// we append the stack head to the new stack heads
+							newStackHeads = append(newStackHeads, newStackHead)
+							// we reprent the new stack head to the list of stack heads to process
+							stackHeads = append(stackHeads, newStackHead)
 						}
-						// we append the stack head to the new stack heads
-						newStackHeads = append(newStackHeads, newStackHead)
-						// we reprent the new stack head to the list of stack heads to process
-						stackHeads = append([]*Head[T]{newStackHead}, stackHeads...)
 					}
 				}
 			}
 		}
 
-
-	}
-	return newStackHeads
-}
-
-func (p *Parser[T]) Run(input *Input[T]) []*Head[T] {
-
-	stackHeads := []*Head[T]{
-		&Head[T]{
-			Position: 0,
-			State: 0,
-			Parents: nil,
-		},
-	}
-
-	acceptedStacks := []*Head[T]{}
-
-	for {
-		newStackHeads := p.reduceStackHeads(stackHeads, input)
+		// end reduce stack heads
 
 		for _, head := range newStackHeads {
 			if head.Position == input.Len() && head.State == -1 {
-				acceptedStacks = append(acceptedStacks, head)
+				acceptedHeads = append(acceptedHeads, head)
 			}
 		}
 
-		fmt.Println(len(newStackHeads),"...")
+		stackHeads = stackHeads[:0]
 
-		stackHeads = p.shiftStackHeads(newStackHeads, input)
+		newStackHeads, stackHeads = stackHeads, newStackHeads
+
+		// begin shift stack heads
+
+		for {
+
+			if len(stackHeads) == 0 {
+				break
+			}
+
+			head := stackHeads[0]
+			stackHeads = stackHeads[1:]
+
+			var transition int
+			var found bool
+			var length int
+			var token T
+
+			for _, computation := range p.Computations[head.State] {
+				if ok, value, l := computation.Function(head.Position, input); ok {
+					token = value
+					transition = computation.State
+					length = l
+					found = true
+					break
+				}
+			}
+
+			for value, tr := range p.Transitions[head.State] {
+				if ok, l := input.HasPrefix(head.Position, value); ok {
+					token = value
+					transition = tr
+					length = l
+					found = true
+					break
+				}
+			}
+
+			if found {
+
+				parent := &Parent[T]{SemanticValue: &SemanticValue[T]{Value: token}, Head: head}
+
+				newStackHead := &Head[T]{
+					State:    transition,
+					Position: head.Position + length,
+					Parents:  []*Parent[T]{parent},
+				}
+				existingStackHead := getStackHead(newStackHeads, transition)
+
+				if existingStackHead != nil {
+					existingStackHead.Parents = append(existingStackHead.Parents, parent)
+				} else {
+					newStackHeads = append(newStackHeads, newStackHead)
+				}
+			}
+		}
+
+		stackHeads = newStackHeads
+
+		// end shift stack heads
 
 		if len(stackHeads) == 0 {
 			break
 		}
 	}
 
-	return acceptedStacks
+	return acceptedHeads
 }
 
 var termGrammar = Grammar[string]{
-	{"S", "term", "$"},
+	{"S", "term", ""},
 	{"term", "factor"},
 	{"term", "factor", "+", "term"},
 	{"factor", "s", "times", "factor"},
 	{"factor", "s"},
 	{"s", "number"},
 	{"s", "symbol"},
+	{"symbol", "a"},
+	{"times", "*"},
 	{"number", "digits"},
 	{"digits", "digits", "digit"},
 	{"digits", "digit"},
 	{"digit", "1"},
 	{"digit", "2"},
 	{"digit", "3"},
+	{"digit", "0"},
 }
 
-var inputString = []string{"symbol", "times", "symbol", "times", "number", "+", "symbol"}
+var eGrammar = Grammar[string]{
+    {"S","e",""},
+    {"e","e","+","e"},
+    {"e","b"},
+}
+
+func CompileRegex[T Tokenlike](value string) TransitionFunction[T] {
+
+	re, err := regexp.Compile(value)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return func(pos int, input Input[T]) (bool, T, int) {
+		switch vt := input.(type) {
+		case Input[string]:
+			if result := vt.(*StringInput).MatchRegex(re, pos); result != "" {
+				return true, any(result).(T), len(result)
+			}
+		default:
+			panic("regexp undefined for this type")
+		}
+		return false, *new(T), 0
+	}
+}
+
+var grammarGrammar = Grammar[string]{
+	{"S", "ows", "[]rules", "ows", ""},
+	{"[]rules"},
+	{"[]rules", "[]rules", "{}rule"},
+	{"{}rule", "ows", ".name", "[]args", "ows", "->", "patterns", ";"},
+	{"[]args"},
+	{"[]args", "(", "arglist", ")"},
+	{"arglist"},
+	{"arglist", "arglist", ",", "|arg"},
+	{"arglist", "|arg"},
+	{"|arg", CompileRegex[string]("[a-z]+")},
+	{"patterns", "alternatives"},
+	{"patterns", "[]patternlist"},
+	{"alternatives", "[]alternativelist"},
+	{"[]alternativelist", "[]patternlist"},
+	{"[]alternativelist", "[]alternativelist", "|", "[]patternlist"},
+	{"[]patternlist", "[]patternlist", ",", "{}pattern"},
+	{"[]patternlist", "{}pattern"},
+	{"[]patternlist", "ows"},
+	{"{}pattern", "ows", "pattern-type", "ows"},
+	{"pattern-type", ".name"},
+	{"pattern-type", "expression"},
+	{"pattern-type", ".reference"},
+	{"pattern-type", ".literal"},
+	{"pattern-type", ".regex"},
+	{"pattern-type", ":end"},
+	{"expression", "(", "ows", "expression-value", "ows", ")"},
+	{"expression-value", "[]expr-alternatives"},
+	{"[]expr-alternatives", "[]expr-alternatives", "ows", "|", "ows", "{}expr-alternative"},
+	{"[]expr-alternatives", "{}expr-alternative"},
+	{"{}expr-alternative", ".name"},
+	{".reference", "\\", ":reference-value"},
+	{":reference-value", CompileRegex[string]("[0-9]+")},
+	{":end", "$"},
+	{".name", "|name-value"},
+	{"|name-value", CompileRegex[string](`(:|\[\]|\{\}|\.|\|)?[^\#\s\|\[\]\|\.\:\;\,\"\'\)\(\\]+`)},
+	{".literal", "\"", ":literal-value", "\"", ":literal-suffix"},
+	{":literal-value", CompileRegex[string](`(\\.|[^\"])*`)},
+	{".regex", "re:", "|regex-value"},
+	{"|regex-value", CompileRegex[string](`(\\.|[^\;\,\n])*`)},
+	{":literal-suffix"},
+	{":literal-suffix", "_foo"},
+	{"optional_newline"},
+	{"optional_newline", "newline"},
+	{"newline", "\n"},
+	{"newline-or-end", "newline"},
+	{"newline-or-end", ""},
+	{"ows"},
+	{"ows", "ws"},
+	{"ws", "ws", "wsc"},
+	{"ws", "wsc"},
+	{"wsc", "comment"},
+	{"wsc", " "},
+	{"wsc", "\t"},
+	{"wsc", "\n"},
+	{"comment", "#", "anything", "newline-or-end"},
+	{"anything", CompileRegex[string](`[^\n]*`)},
+}
+
+
 
 func main() {
 	parser, err := MakeParser[string](termGrammar)
@@ -541,16 +871,58 @@ func main() {
 	if err != nil {
 		fmt.Printf("cannot build parser: %v\n", err)
 	} else {
-		fmt.Println("it worked")
-		fmt.Println(parser.Transitions)
+
 		for _, stack := range parser.Stacks {
 			fmt.Println(stack)
 		}
 
-		input := MakeInput[string](inputString)
+		input := MakeStringInput("a*10+10+a")
 
-		acceptedStacks := parser.Run(input)
+		acceptedHeads := parser.Run(input)
 
-		fmt.Printf("Got %d accepted stacks\n", len(acceptedStacks))
+		fmt.Printf("Got %d accepted stacks\n", len(acceptedHeads))
+		fmt.Println(acceptedHeads[0].SemanticValue())
+		fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
 	}
+
+	parser, _ = MakeParser[string](eGrammar)
+
+	eStr := "b"
+
+	for i :=0;i < 100; i++ {
+		eStr += "+b"
+	}
+
+	fmt.Println(parser.Rules())
+
+	input := MakeStringInput(eStr)
+	acceptedHeads := parser.Run(input)
+	fmt.Printf("Got %d accepted stacks (eGrammar)\n", len(acceptedHeads))
+	// fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+
+	grammarParser, err := MakeParser[string](grammarGrammar)
+
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("grammar parser is ready")
+	}
+
+	grammarStr := ""
+
+	for i:=0; i<10000; i++ {
+		grammarStr += "baz -> bar, bar, bar, bar;"
+	}
+
+	grammarProgram := MakeStringInput(grammarStr)
+
+	fmt.Println("Running...")
+
+	acceptedHeads = grammarParser.Run(grammarProgram)
+	fmt.Printf("Got %d accepted stacks\n", len(acceptedHeads))
+
+	return
+
+	fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+
 }
