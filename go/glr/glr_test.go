@@ -29,11 +29,15 @@ func BenchmarkGrammarGrammar(b *testing.B) {
 
 func BenchmarkEGrammar(b *testing.B) {
 
-	parser, _ := MakeParser[string](eGrammar)
+	parser, err := MakeParser[string](eGrammar)
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	str := "b"
 
-	for i :=0;i < 100000; i++ {
+	for i :=0;i < 10000; i++ {
 		str += "+b"
 	}
 
@@ -50,7 +54,11 @@ func BenchmarkEGrammar(b *testing.B) {
 
 func BenchmarkTermGrammar(b *testing.B) {
 
-	parser, _ := MakeParser[string](termGrammar)
+	parser, err := MakeParser[string](termGrammar)
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	str := "1"
 

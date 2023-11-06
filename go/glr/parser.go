@@ -273,6 +273,13 @@ func MakeParser[T Tokenlike](grammar Grammar[T]) (*Parser[T], error) {
 		return nil, err
 	}
 
+	for state, _ := range parser.Transitions {
+		if _, ok := parser.Reductions[state]; ok {
+			// we have a shift-reduce conflict ?
+			return parser, fmt.Errorf("shift-reduce conflict in state %d", state)
+		}
+	}
+
 	return parser, nil
 }
 
@@ -858,14 +865,18 @@ var grammarGrammar = Grammar[string]{
 
 
 func main() {
+
 	parser, err := MakeParser[string](termGrammar)
-	parser.Debug = true
+
+	fmt.Println(parser.Rules())
+
 	if err != nil {
 		fmt.Printf("cannot build parser: %v\n", err)
 		return
 	}
 
-	fmt.Println(parser.Rules())
+	parser.Debug = true
+
 
 	for _, stack := range parser.Stacks {
 		fmt.Println(stack)
@@ -880,7 +891,12 @@ func main() {
 	//fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
 
 
-	parser, _ = MakeParser[string](eGrammar)
+	parser, err = MakeParser[string](eGrammar)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	eStr := "b"
 
