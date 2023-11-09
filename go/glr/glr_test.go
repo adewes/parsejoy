@@ -62,7 +62,7 @@ func BenchmarkTermGrammar(b *testing.B) {
 
 	str := "1"
 
-	for i :=0;i < 200; i++ {
+	for i :=0;i < 20000; i++ {
 		str += "+1+a*a+20*a"
 	}
 

@@ -276,7 +276,7 @@ func MakeParser[T Tokenlike](grammar Grammar[T]) (*Parser[T], error) {
 	for state, _ := range parser.Transitions {
 		if _, ok := parser.Reductions[state]; ok {
 			// we have a shift-reduce conflict ?
-			return parser, fmt.Errorf("shift-reduce conflict in state %d", state)
+			//return parser, fmt.Errorf("shift-reduce conflict in state %d", state)
 		}
 	}
 
@@ -615,9 +615,9 @@ func hasParent[T Tokenlike](parent *Parent[T], parents []*Parent[T]) bool {
 func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 
 	// we start in the 0 state
-	states := make([]int, 1, 100)
-	symbols := make([]*SemanticValue[T], 0, 10)
-	lookahead := make([]*SemanticValue[T], 0, 10)
+	states := make([]int, 1, 100000)
+	symbols := make([]*SemanticValue[T], 0, 100000)
+	lookahead := make([]*SemanticValue[T], 0, 100000)
 	pos := 0
 
 	for {
@@ -628,6 +628,10 @@ func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 
 			state := states[len(states)-1]
 			reductions, ok := p.Reductions[state]
+
+			if p.Debug {
+				fmt.Printf("states: %d, lookahead: %d, symbols: %d\n", len(states), len(lookahead), len(symbols))			
+			}
 
 			if !ok {
 				// no further reductions for this state
@@ -643,6 +647,7 @@ func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 				}
 
 				children := make([]*SemanticValue[T], rlen)
+
 				copy(children, symbols[len(symbols)-rlen:])
 
 				semanticValue := &SemanticValue[T]{
@@ -882,14 +887,13 @@ func main() {
 		fmt.Println(stack)
 	}
 
-	input := MakeStringInput("a*10+22+a*a*a*a+a")
+	input := MakeStringInput("a*10+22+a*a*a*a+a+a+a+a+a*a*a*a*a+a+a+a")
 
 	semanticValues := parser.Run(input)
 
 	fmt.Printf("Got %d semantic values\n", len(semanticValues))
 	fmt.Println(semanticValues[0].PrettyString())
 	//fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
-
 
 	parser, err = MakeParser[string](eGrammar)
 
@@ -900,8 +904,8 @@ func main() {
 
 	eStr := "b"
 
-	for i :=0;i < 1; i++ {
-		eStr += "+b"
+	for i :=0;i < 100000; i++ {
+		eStr += "+b+b+b"
 	}
 
 	fmt.Println("ready")
@@ -911,8 +915,11 @@ func main() {
 	input = MakeStringInput(eStr)
 	semanticValues = parser.Run(input)
 	fmt.Printf("Got %d semantic values (eGrammar)\n", len(semanticValues))
-	fmt.Println(semanticValues[0].PrettyString())
+	// fmt.Println(semanticValues[0].PrettyString())
 	// fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
+
+	return
+
 
 	grammarParser, err := MakeParser[string](grammarGrammar)
 
