@@ -615,7 +615,7 @@ func hasParent[T Tokenlike](parent *Parent[T], parents []*Parent[T]) bool {
 func (p *Parser[T]) Run(input Input[T]) []*SemanticValue[T] {
 
 	// we start in the 0 state
-	states := make([]int, 1, 10000)
+	states := make([]int, 1, 100)
 	symbols := make([]*SemanticValue[T], 0, 10)
 	lookahead := make([]*SemanticValue[T], 0, 10)
 	pos := 0

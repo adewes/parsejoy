@@ -12,7 +12,7 @@ func BenchmarkGrammarGrammar(b *testing.B) {
 
 	str := ""
 
-	for i :=0;i < 1; i++ {
+	for i :=0;i < 1000; i++ {
 		str += "baz -> bar, bar, bar, bar;"
 	}
 
