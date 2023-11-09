@@ -334,7 +334,7 @@ class Parser(object):
         return u'{} \u2192 {}'.format(self.grammar[i][0],' '.join([str(s) for s in self.grammar[i][1:]]))
 
     def get_stack_head(self, stack_heads, state):
-        for head in stack_heads
+        for head in stack_heads:
             if head[0] == state:
                 return head
         return None
@@ -647,7 +647,7 @@ def make_ast(semantic_value):
         return l
 
 if __name__ == '__main__':
-    parser = Parser(term_grammar, debug=False)
+    parser = Parser(grammar_grammar, debug=False)
     import pprint
     print("States:")
     pprint.pprint([sorted(list(state)) for state in sorted(parser.states)])
@@ -655,7 +655,6 @@ if __name__ == '__main__':
     pprint.pprint(dict(parser.transitions))
     for i in range(len(parser.grammar)):
         print(i,":",parser.rule_as_str(i))
-    exit(0)
 
     input_string = ['n','+','n','+','n','$']
     input_string = ['(',')']
@@ -678,12 +677,12 @@ if __name__ == '__main__':
     # print(len(input_string))
     # input_string ='1+2+1+121'
     start = time.time()
-    n = 1
+    n = 100
     print(" ".join(input_string))
     for i in range(n):
         stack_heads, longest_stacks = parser.run(input_string)
     stop = time.time()
-    print(1.0/(len(input_string)/((stop-start)/n))*1000.0)
+    print("{:.2f} MB/s".format(n*len(input_string)/(stop-start)/1024/1024))
     print("Accepted stacks: {}".format(len(stack_heads)))
 
     if len(stack_heads) == 0:
@@ -708,7 +707,16 @@ if __name__ == '__main__':
     with open(filename) as file:
         content = file.read()
 
-    stack_heads, longest_stacks = new_parser.run(content)
+    start = time.time()
+    n = 100
+    print(" ".join(input_string))
+    for i in range(n):
+        stack_heads, longest_stacks = new_parser.run(content)
+    stop = time.time()
+    print("{:.2f} MB/s".format(n*len(input_string)/(stop-start)/1024/1024))
+    print("Accepted stacks: {}".format(len(stack_heads)))
+
+    exit(0)
 
     if len(stack_heads) == 0:
         print("cannot parse")
