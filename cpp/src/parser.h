@@ -9,6 +9,8 @@
 namespace sscientists {
 namespace parsejoy {
 
+typedef unsigned char byte;
+
 class State {
 public:
     State(LuaEnvironment& luaEnvironment);

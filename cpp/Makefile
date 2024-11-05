@@ -5,9 +5,9 @@ PYTHON_BUILDDIR=build/python
 DEPSDIR=dependencies
 
 YAML_CPP_VERSION=0.5.5
-LUAJIT_VERSION=2.0.4
-BOOST_VERSION=1.61.0
-LIBCRYPTO_VERSION=5.6.4
+LUAJIT_VERSION=2.1
+BOOST_VERSION=1.85.0
+LIBCRYPTO_VERSION=8.9.0
 
 SWIG_OPTS=
 PYTHON_VERSION=2.7
@@ -35,14 +35,14 @@ GCC = gcc $(GCC_OPTS)
 
 INCLUDEDIRS=-isystem$(SRCDIR) \
 		    -isystem/usr/include/python$(PYTHON_VERSION) \
-			-isystem$(DEPSDIR)/libcrypto++$(LIBCRYPTO_VERSION) \
+			-isystem$(DEPSDIR)/libcrypto++-$(LIBCRYPTO_VERSION) \
 			-isystem$(DEPSDIR)/boost-$(BOOST_VERSION) \
 			-isystem$(DEPSDIR)/yaml-cpp-$(YAML_CPP_VERSION)/include \
 			-isystem$(DEPSDIR)/luajit-$(LUAJIT_VERSION)/src \
 			-isystem$(DEPSDIR)/re2-2016-10-01
 
 LIBDIRS=-L$(DEPSDIR)/boost-$(BOOST_VERSION) \
-		-L$(DEPSDIR)/libcrypto++$(LIBCRYPTO_VERSION) \
+		-L$(DEPSDIR)/libcrypto++-$(LIBCRYPTO_VERSION) \
 		-L$(DEPSDIR)/yaml-cpp-$(YAML_CPP_VERSION) \
 		-L$(DEPSDIR)/luajit-$(LUAJIT_VERSION)/src \
 		-L$(DEPSDIR)/re2-2016-10-01/obj \
