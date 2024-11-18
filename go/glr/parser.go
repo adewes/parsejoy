@@ -918,8 +918,6 @@ func main() {
 	// fmt.Println(semanticValues[0].PrettyString())
 	// fmt.Println(acceptedHeads[0].SemanticValue().PrettyString())
 
-	return
-
 
 	grammarParser, err := MakeParser[string](grammarGrammar)
 
